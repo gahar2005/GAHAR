@@ -650,15 +650,31 @@ class _SplashViewState extends State<SplashView> with SingleTickerProviderStateM
       Widget initialScreen;
       if (token == null || token.isEmpty) {
         initialScreen = LoginScreen(
-          onLoginSuccess: () {
-            Navigator.of(context).pushReplacement(
-              MaterialPageRoute(
-                builder: (ctx) => MainNavigationShell(
-                  onThemeToggle: () => MyApp.of(ctx)?.toggleTheme(),
-                  isDark: MyApp.of(ctx)?.isDark ?? true,
+          onLoginSuccess: () async {
+            final currentUser = await StorageService.getUserProfile();
+            if (!context.mounted) return;
+            if (currentUser?.role == UserRole.superAdmin) {
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(
+                  builder: (ctx) => SuperAdminScreen(
+                    onLogout: () {
+                      Navigator.of(ctx).pushReplacement(
+                        MaterialPageRoute(builder: (_) => const SplashView()),
+                      );
+                    },
+                  ),
                 ),
-              ),
-            );
+              );
+            } else {
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(
+                  builder: (ctx) => MainNavigationShell(
+                    onThemeToggle: () => MyApp.of(ctx)?.toggleTheme(),
+                    isDark: MyApp.of(ctx)?.isDark ?? true,
+                  ),
+                ),
+              );
+            }
           },
         );
       } else if (user?.role == UserRole.superAdmin) {

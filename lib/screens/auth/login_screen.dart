@@ -62,14 +62,16 @@ class _LoginScreenState extends State<LoginScreen> {
       await StorageService.saveUserProfile(user);
 
       if (mounted) {
+        setState(() => _loading = false);
         widget.onLoginSuccess();
       }
     } else {
-      setState(() => _errorMessage = response['message'] ?? 'Login failed. Please check your credentials.');
-    }
-
-    if (mounted) {
-      setState(() => _loading = false);
+      if (mounted) {
+        setState(() {
+          _errorMessage = response['message'] ?? 'Login failed. Please check your credentials.';
+          _loading = false;
+        });
+      }
     }
   }
 
