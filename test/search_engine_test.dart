@@ -5,7 +5,7 @@ void main() {
   group('BylawsSearchEngine Tests', () {
     test('Arabic Normalization and Stemming', () {
       // Test Arabic query expansion
-      final query = 'التخرج والمعدل';
+      const query = 'التخرج والمعدل';
       final tokens = BylawsSearchEngine.expandQuery(query);
 
       // Verify that expanded tokens contain expected translated English keywords
@@ -16,7 +16,7 @@ void main() {
     });
 
     test('English Synonyms Expansion', () {
-      final query = 'withdraw fees';
+      const query = 'withdraw fees';
       final tokens = BylawsSearchEngine.expandQuery(query);
 
       expect(tokens, contains('withdrawal'));

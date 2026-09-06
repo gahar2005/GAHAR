@@ -7,6 +7,27 @@ import 'package:flutter_tts/flutter_tts.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+
+import 'models/saved_document.dart';
+import 'models/platform_models.dart';
+import 'screens/compliance_dashboard_screen.dart';
+import 'screens/evidence_tracker_screen.dart';
+import 'screens/library_screen.dart';
+import 'screens/onboarding_screen.dart';
+import 'screens/applicability_screen.dart';
+import 'screens/gap_analysis_screen.dart';
+import 'screens/action_plans_screen.dart';
+import 'screens/licenses_screen.dart';
+import 'screens/survey_prep_screen.dart';
+import 'screens/experts_hub_screen.dart';
+import 'screens/facility_settings_screen.dart';
+import 'screens/admin/super_admin_screen.dart';
+import 'screens/auth/login_screen.dart';
+import 'services/export_service.dart';
+import 'services/storage_service.dart';
+import 'theme/app_theme.dart';
+import 'widgets/ai_copilot_fab.dart';
+
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const MyApp());
@@ -21,7 +42,11 @@ class AppSettings {
 
   static Future<String> getGroqKey() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_groqKeyPref) ?? '';
+    final savedKey = prefs.getString(_groqKeyPref) ?? '';
+    if (savedKey.isEmpty) {
+      return '';
+    }
+    return savedKey;
   }
 
   static Future<void> setGroqKey(String key) async {
@@ -305,18 +330,177 @@ enum ChatMode {
   aiAssistant,
 }
 
+enum AssistantMode {
+  aiConsultant,
+  standardsReference,
+  implementationRoadmap,
+  documentGenerator,
+  documentReview,
+  evidenceGenerator,
+  taskPlanner,
+  trainingAssistant,
+  gapAnalysis,
+}
+
+enum AccreditationDocType {
+  policy,
+  procedure,
+  plan,
+  program,
+  guideline,
+  sop,
+  checklist,
+  form,
+  riskAssessment,
+  jobDescription,
+  emergencyPlan,
+  trainingPlan,
+  auditPlan,
+  qualityPlan,
+}
+
+extension AccreditationDocTypeExt on AccreditationDocType {
+  String get label {
+    switch (this) {
+      case AccreditationDocType.policy:
+        return 'Policy / سياسة';
+      case AccreditationDocType.procedure:
+        return 'Procedure / إجراء';
+      case AccreditationDocType.plan:
+        return 'Plan / خطة';
+      case AccreditationDocType.program:
+        return 'Program / برنامج';
+      case AccreditationDocType.guideline:
+        return 'Guideline / دليل إرشادي';
+      case AccreditationDocType.sop:
+        return 'SOP / خطوات عمل معيارية';
+      case AccreditationDocType.checklist:
+        return 'Checklist / قائمة تحقق';
+      case AccreditationDocType.form:
+        return 'Form / نموذج';
+      case AccreditationDocType.riskAssessment:
+        return 'Risk Assessment / تقييم مخاطر';
+      case AccreditationDocType.jobDescription:
+        return 'Job Description / وصف وظيفي';
+      case AccreditationDocType.emergencyPlan:
+        return 'Emergency Plan / خطة طوارئ';
+      case AccreditationDocType.trainingPlan:
+        return 'Training Plan / خطة تدريب';
+      case AccreditationDocType.auditPlan:
+        return 'Audit Plan / خطة تدقيق';
+      case AccreditationDocType.qualityPlan:
+        return 'Quality Plan / خطة جودة';
+    }
+  }
+}
+
+class AssistantToolInfo {
+  final AssistantMode mode;
+  final String title;
+  final String arabicTitle;
+  final String description;
+  final IconData icon;
+  final Color accentColor;
+
+  const AssistantToolInfo({
+    required this.mode,
+    required this.title,
+    required this.arabicTitle,
+    required this.description,
+    required this.icon,
+    required this.accentColor,
+  });
+}
+
+const List<AssistantToolInfo> kAssistantTools = [
+  AssistantToolInfo(
+    mode: AssistantMode.aiConsultant,
+    title: 'AI Consultant',
+    arabicTitle: 'مستشار الاعتماد',
+    description: 'Ask any question on GAHAR standards and get expert accreditation advice.',
+    icon: Icons.psychology_rounded,
+    accentColor: Color(0xFF7C6FF7),
+  ),
+  AssistantToolInfo(
+    mode: AssistantMode.standardsReference,
+    title: 'Standard Explainer',
+    arabicTitle: 'شرح المعايير',
+    description: 'Deep 6-part explanation of standard purpose, why required, and surveyor findings.',
+    icon: Icons.menu_book_rounded,
+    accentColor: Color(0xFF03DAC6),
+  ),
+  AssistantToolInfo(
+    mode: AssistantMode.implementationRoadmap,
+    title: '10-Step Roadmap',
+    arabicTitle: 'خطة التطبيق العملي',
+    description: 'Actionable 10-step implementation roadmap from committee to monitoring.',
+    icon: Icons.alt_route_rounded,
+    accentColor: Color(0xFFFFB74D),
+  ),
+  AssistantToolInfo(
+    mode: AssistantMode.documentGenerator,
+    title: 'Document Generator',
+    arabicTitle: 'منشئ الوثائق والمعايير',
+    description: 'Generates 14+ GAHAR compliant policies, SOPs, plans, & risk assessments.',
+    icon: Icons.description_rounded,
+    accentColor: Color(0xFF4FC3F7),
+  ),
+  AssistantToolInfo(
+    mode: AssistantMode.documentReview,
+    title: 'Document Auditor',
+    arabicTitle: 'مراجعة وتدقيق الوثائق',
+    description: 'Audit any document text against GAHAR, get a Compliance Score % & gaps.',
+    icon: Icons.fact_check_rounded,
+    accentColor: Color(0xFFE57373),
+  ),
+  AssistantToolInfo(
+    mode: AssistantMode.evidenceGenerator,
+    title: 'Evidence Checklist',
+    arabicTitle: 'أدلة الإثبات',
+    description: 'Required accreditation evidence checklist (minutes, logs, competency).',
+    icon: Icons.inventory_2_rounded,
+    accentColor: Color(0xFF81C784),
+  ),
+  AssistantToolInfo(
+    mode: AssistantMode.taskPlanner,
+    title: 'Task & Action Planner',
+    arabicTitle: 'مخطط المهام والمسؤوليات',
+    description: 'Converts standards into department-level tasks, priorities, & due dates.',
+    icon: Icons.task_alt_rounded,
+    accentColor: Color(0xFFBA68C8),
+  ),
+  AssistantToolInfo(
+    mode: AssistantMode.trainingAssistant,
+    title: 'Training Assistant',
+    arabicTitle: 'حزمة التدريب والتقييم',
+    description: 'Generates staff training plan, slide outline, 5-question quiz, & competency checklist.',
+    icon: Icons.model_training_rounded,
+    accentColor: Color(0xFFFF8A65),
+  ),
+  AssistantToolInfo(
+    mode: AssistantMode.gapAnalysis,
+    title: 'Gap & Risk Analysis',
+    arabicTitle: 'تحليل الفجوات والمخاطر',
+    description: 'Evaluates status vs. GAHAR, risk levels (High/Med/Low), & CAPA action plan.',
+    icon: Icons.analytics_rounded,
+    accentColor: Color(0xFF4DB6AC),
+  ),
+];
+
 // ─── Chat Message Model ───────────────────────────────────────────────────────
 class ChatMessage {
   final String text;
   final bool isUser;
   final List<SearchResult> results;
   final bool isAi;
+  final AssistantMode? assistantMode;
 
   const ChatMessage({
     required this.text,
     required this.isUser,
     this.results = const [],
     this.isAi = false,
+    this.assistantMode,
   });
 }
 
@@ -396,14 +580,14 @@ class HighlightText extends StatelessWidget {
 class MyApp extends StatefulWidget {
   const MyApp({super.key});
 
-  static _MyAppState? of(BuildContext context) =>
-      context.findAncestorStateOfType<_MyAppState>();
+  static MyAppState? of(BuildContext context) =>
+      context.findAncestorStateOfType<MyAppState>();
 
   @override
-  State<MyApp> createState() => _MyAppState();
+  State<MyApp> createState() => MyAppState();
 }
 
-class _MyAppState extends State<MyApp> {
+class MyAppState extends State<MyApp> {
   ThemeMode _themeMode = ThemeMode.dark;
 
   void toggleTheme() {
@@ -417,36 +601,11 @@ class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: "FCIT Bylaws Search",
+      title: "GAHAR AI Accreditation Platform",
       debugShowCheckedModeBanner: false,
       themeMode: _themeMode,
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF5B4FCF),
-          brightness: Brightness.light,
-        ),
-        cardTheme: CardThemeData(
-          elevation: 2,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        ),
-      ),
-      darkTheme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF7C6FF7),
-          brightness: Brightness.dark,
-          surface: const Color(0xFF16162A),
-          primary: const Color(0xFF7C6FF7),
-          secondary: const Color(0xFF03DAC6),
-        ),
-        scaffoldBackgroundColor: const Color(0xFF0A0A16),
-        cardTheme: CardThemeData(
-          color: const Color(0xFF16162A),
-          elevation: 4,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        ),
-      ),
+      theme: AppTheme.lightTheme,
+      darkTheme: AppTheme.darkTheme,
       home: const SplashView(),
     );
   }
@@ -484,21 +643,54 @@ class _SplashViewState extends State<SplashView> with SingleTickerProviderStateM
     _controller.forward();
 
     // Navigate after 2 seconds
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) {
-        Navigator.of(context).pushReplacement(
-          PageRouteBuilder(
-            pageBuilder: (context, animation, secondaryAnimation) => ChatScreen(
-              onThemeToggle: () => MyApp.of(context)?.toggleTheme(),
-              isDark: MyApp.of(context)?.isDark ?? true,
-            ),
-            transitionsBuilder: (context, animation, secondaryAnimation, child) {
-              return FadeTransition(opacity: animation, child: child);
-            },
-            transitionDuration: const Duration(milliseconds: 600),
-          ),
+    Future.delayed(const Duration(seconds: 2), () async {
+      if (!mounted) return;
+      final token = await StorageService.getAuthToken();
+      final user = await StorageService.getUserProfile();
+      if (!mounted) return;
+
+      Widget initialScreen;
+      if (token == null || token.isEmpty) {
+        initialScreen = LoginScreen(
+          onLoginSuccess: () {
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(
+                builder: (ctx) => MainNavigationShell(
+                  onThemeToggle: () => MyApp.of(ctx)?.toggleTheme(),
+                  isDark: MyApp.of(ctx)?.isDark ?? true,
+                ),
+              ),
+            );
+          },
+        );
+      } else if (user?.role == UserRole.superAdmin) {
+        initialScreen = SuperAdminScreen(
+          onLogout: () {
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(
+                builder: (ctx) => const SplashView(),
+              ),
+            );
+          },
+        );
+      } else {
+        initialScreen = MainNavigationShell(
+          onThemeToggle: () => MyApp.of(context)?.toggleTheme(),
+          isDark: MyApp.of(context)?.isDark ?? true,
         );
       }
+
+      Navigator.of(context).pushReplacement(
+        PageRouteBuilder(
+          pageBuilder: (context, animation, secondaryAnimation) =>
+              initialScreen,
+          transitionsBuilder:
+              (context, animation, secondaryAnimation, child) {
+            return FadeTransition(opacity: animation, child: child);
+          },
+          transitionDuration: const Duration(milliseconds: 600),
+        ),
+      );
     });
   }
 
@@ -514,7 +706,6 @@ class _SplashViewState extends State<SplashView> with SingleTickerProviderStateM
       backgroundColor: const Color(0xFF07070E),
       body: Stack(
         children: [
-          // Background glowing spheres
           Positioned(
             top: -120,
             left: -120,
@@ -523,19 +714,7 @@ class _SplashViewState extends State<SplashView> with SingleTickerProviderStateM
               height: 320,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: const Color(0xFF7C6FF7).withValues(alpha: 0.12),
-              ),
-            ),
-          ),
-          Positioned(
-            bottom: -120,
-            right: -120,
-            child: Container(
-              width: 320,
-              height: 320,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: const Color(0xFF03DAC6).withValues(alpha: 0.08),
+                color: AppColors.primary.withOpacity(0.2),
               ),
             ),
           ),
@@ -550,35 +729,33 @@ class _SplashViewState extends State<SplashView> with SingleTickerProviderStateM
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        // Beautiful glowing widget-based logo
                         Container(
                           width: 96,
                           height: 96,
                           decoration: BoxDecoration(
                             gradient: const LinearGradient(
-                              colors: [Color(0xFF7C6FF7), Color(0xFF03DAC6)],
+                              colors: [AppColors.primary, AppColors.primaryLight],
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
                             ),
                             borderRadius: BorderRadius.circular(28),
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFF7C6FF7).withValues(alpha: 0.35),
+                                color: AppColors.primary.withOpacity(0.4),
                                 blurRadius: 24,
-                                spreadRadius: 1,
                                 offset: const Offset(0, 8),
                               ),
                             ],
                           ),
                           child: const Icon(
-                            Icons.school_rounded,
+                            Icons.health_and_safety_rounded,
                             color: Colors.white,
                             size: 52,
                           ),
                         ),
                         const SizedBox(height: 24),
                         const Text(
-                          "FCIT BYLAWS",
+                          "GAHAR PLATFORM",
                           style: TextStyle(
                             fontSize: 24,
                             fontWeight: FontWeight.bold,
@@ -588,10 +765,10 @@ class _SplashViewState extends State<SplashView> with SingleTickerProviderStateM
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          "Accreditation Standards Search",
+                          "Healthcare Accreditation Enterprise AI",
                           style: TextStyle(
                             fontSize: 13,
-                            color: Colors.white.withValues(alpha: 0.4),
+                            color: Colors.white.withOpacity(0.6),
                             letterSpacing: 1.5,
                           ),
                         ),
@@ -604,6 +781,148 @@ class _SplashViewState extends State<SplashView> with SingleTickerProviderStateM
           ),
         ],
       ),
+    );
+  }
+}
+
+// ─── Main Navigation Shell ───────────────────────────────────────────────────
+class MainNavigationShell extends StatefulWidget {
+  final VoidCallback onThemeToggle;
+  final bool isDark;
+
+  const MainNavigationShell({
+    super.key,
+    required this.onThemeToggle,
+    required this.isDark,
+  });
+
+  @override
+  State<MainNavigationShell> createState() => _MainNavigationShellState();
+}
+
+class _MainNavigationShellState extends State<MainNavigationShell> {
+  int _currentIndex = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final screens = [
+      const ComplianceDashboardScreen(),
+      ChatScreen(
+        onThemeToggle: widget.onThemeToggle,
+        isDark: widget.isDark,
+      ),
+      const ApplicabilityScreen(),
+      const GapAnalysisScreen(),
+      const ActionPlansScreen(),
+      const DocumentLibraryScreen(),
+      const EvidenceTrackerScreen(),
+      const LicensesScreen(),
+      const SurveyPrepScreen(),
+      const ExpertsHubScreen(),
+      FacilitySettingsScreen(
+        onLogout: () {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (ctx) => const SplashView(),
+            ),
+          );
+        },
+      ),
+    ];
+
+    return Scaffold(
+      drawer: Drawer(
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            DrawerHeader(
+              decoration: BoxDecoration(color: AppColors.primary),
+              child: const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.health_and_safety_rounded, size: 48, color: Colors.white),
+                  SizedBox(height: 10),
+                  Text(
+                    'GAHAR Platform',
+                    style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                  Text(
+                    'Accreditation Modules',
+                    style: TextStyle(color: Colors.white70, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+            _buildDrawerTile(0, 'Dashboard', Icons.dashboard_rounded),
+            _buildDrawerTile(1, 'AI Assistant / Chat', Icons.smart_toy_rounded),
+            _buildDrawerTile(2, 'Requirements Applicability', Icons.rule_rounded),
+            _buildDrawerTile(3, 'Gap Analysis Engine', Icons.analytics_rounded),
+            _buildDrawerTile(4, 'Action Plan Manager', Icons.task_alt_rounded),
+            _buildDrawerTile(5, 'Document Library (v1.0)', Icons.folder_rounded),
+            _buildDrawerTile(6, 'Evidence Tracker', Icons.fact_check_rounded),
+            _buildDrawerTile(7, 'Licenses Tracker', Icons.badge_rounded),
+            _buildDrawerTile(8, 'Survey Preparation', Icons.verified_user_rounded),
+            _buildDrawerTile(9, 'Accreditation Experts Hub', Icons.people_alt_rounded),
+            const Divider(),
+            _buildDrawerTile(10, 'Facility Settings & Team', Icons.settings_rounded),
+          ],
+        ),
+      ),
+      body: IndexedStack(
+        index: _currentIndex,
+        children: screens,
+      ),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _currentIndex > 4 ? 0 : _currentIndex,
+        onDestinationSelected: (index) => setState(() => _currentIndex = index),
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.dashboard_outlined),
+            selectedIcon: Icon(Icons.dashboard_rounded),
+            label: 'Dashboard',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.smart_toy_outlined),
+            selectedIcon: Icon(Icons.smart_toy_rounded),
+            label: 'AI Chat',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.rule_outlined),
+            selectedIcon: Icon(Icons.rule_rounded),
+            label: 'Requirements',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.analytics_outlined),
+            selectedIcon: Icon(Icons.analytics_rounded),
+            label: 'Gaps',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.folder_open_outlined),
+            selectedIcon: Icon(Icons.folder_rounded),
+            label: 'Library',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDrawerTile(int index, String title, IconData icon) {
+    final isSelected = _currentIndex == index;
+    return ListTile(
+      leading: Icon(icon, color: isSelected ? AppColors.primary : Colors.grey),
+      title: Text(
+        title,
+        style: TextStyle(
+          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+          color: isSelected ? AppColors.primary : null,
+        ),
+      ),
+      selected: isSelected,
+      onTap: () {
+        Navigator.pop(context);
+        setState(() => _currentIndex = index);
+      },
     );
   }
 }
@@ -630,16 +949,16 @@ class _ChatScreenState extends State<ChatScreen> {
   final ScrollController _scrollController = ScrollController();
   final FlutterTts _tts = FlutterTts();
   bool _loading = true;
-  ChatMode _chatMode = ChatMode.offlineSearch;
+  ChatMode _chatMode = ChatMode.aiAssistant;
+  AssistantMode _activeAssistantMode = AssistantMode.aiConsultant;
+  AccreditationDocType _selectedDocType = AccreditationDocType.policy;
   bool _aiLoading = false;
 
   static const List<String> _suggestions = [
-    "What are the graduation requirements?",
-    "Minimum GPA to pass a course?",
-    "How many credit hours to graduate?",
-    "Academic probation rules",
-    "Course withdrawal policy",
-    "Grading system and GPA calculation",
+    "What are patient and family rights in GAHAR standards?",
+    "What is the informed consent process (PCC.06)?",
+    "How does GAHAR define patient-centered care?",
+    "What evidence is required for Infection Control (IPC.01)?",
   ];
 
   @override
@@ -668,27 +987,206 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
-  int? _extractPageNumber(String text) {
-    final match = RegExp(r"\|\s*Page\s*\|\s*(\d+)", caseSensitive: false).firstMatch(text);
-    if (match != null) {
-      return int.tryParse(match.group(1) ?? "");
+  String _buildPromptForMode({
+    required AssistantMode mode,
+    required String query,
+    required String context,
+    String? docType,
+    String? pastedDocument,
+  }) {
+    switch (mode) {
+      case AssistantMode.aiConsultant:
+        return '''
+You are a Senior Healthcare Accreditation Consultant specializing in GAHAR (General Authority for Healthcare Accreditation and Regulation) 2025 Standards.
+Your role is to guide healthcare organizations through accreditation compliance, offering expert, authoritative, and practical advice.
+
+Use the provided GAHAR Standards Context to answer the user's question accurately.
+If the context contains relevant GAHAR Safety Requirements (GSRs), Evidence of Compliance (EOCs), or standards, cite them explicitly (e.g., GSR.01, PCC.06, SAS.03).
+Structure your response professionally using headers, bullet points, and clear explanations.
+Answer in the same language as the user's inquiry (Arabic or English).
+
+[GAHAR STANDARDS CONTEXT]:
+$context
+
+[USER QUESTION]:
+$query
+''';
+
+      case AssistantMode.standardsReference:
+        return '''
+You are a GAHAR Accreditation Standards Expert.
+The user wants a deep, structured explanation of a GAHAR standard or requirement related to: "$query".
+
+Using the provided GAHAR Standards Context, generate a comprehensive 6-part reference guide:
+
+1. 📌 **Simple Explanation (الشرح المبسط)**: Explain the standard in clear, accessible language.
+2. 🎯 **Purpose & Rationale (الهدف والأهمية)**: Why does GAHAR mandate this standard? What patient safety / quality dimension does it address?
+3. ⚖️ **Why Required (سبب الوجوب والالزام)**: Statutory, ethical, or safety justification.
+4. 🛠️ **How to Implement (خطوات التطبيق)**: Practical step-by-step guidance for hospital staff.
+5. ⚠️ **Common Implementation Mistakes (أخطاء شائعة)**: Frequent pitfalls observed during hospital surveys.
+6. 🔍 **Surveyor Observations & Scoring (ما يفحصه المقيم)**: What evidence, documents, and staff interviews GAHAR surveyors check to award a "Met (2/2)" score.
+
+[GAHAR STANDARDS CONTEXT]:
+$context
+''';
+
+      case AssistantMode.implementationRoadmap:
+        return '''
+You are an Accreditation Implementation Manager.
+Generate an actionable **10-Step Implementation Roadmap** for complying with GAHAR standards related to: "$query".
+
+Structure the output as a practical project plan with 10 clear phases:
+1. 👥 **Phase 1: Responsible Committee Formation (تشكيل اللجنة/الفريق المسؤول)**
+2. 👤 **Phase 2: Staff & Role Assignments (تحديد المسؤوليات والوظائف)**
+3. 🤝 **Phase 3: Initial Alignment & Meetings (الاجتماعات الأولية)**
+4. 📄 **Phase 4: Document Preparation (إعداد السياسات ودلائل العمل)**
+5. ✍️ **Phase 5: Governance & Leadership Approval (الاعتماد الإداري)**
+6. 🎓 **Phase 6: Staff Education & Training (تدريب العاملين)**
+7. 🚀 **Phase 7: Process Rollout & Operationalization (التطبيق والتنفيذ)**
+8. 📊 **Phase 8: Monitoring & Indicator Tracking (المتابعة ومؤشرات الأداء)**
+9. 📁 **Phase 9: Accreditation Evidence Collection (جمع أدلة الإثبات)**
+10. 🔄 **Phase 10: Evaluation & Continuous Improvement (المراجعة والتحسين)**
+
+Base every phase on the retrieved GAHAR Standards Context:
+$context
+''';
+
+      case AssistantMode.documentGenerator:
+        final documentName = docType ?? "Policy & Procedure";
+        return '''
+You are a Healthcare Quality Document Author specialized in GAHAR Accreditation.
+Generate a complete, publication-ready **$documentName** compliant with GAHAR Accreditation Standards for: "$query".
+
+Format the document using standard professional healthcare governance layout:
+
+---
+# 🏥 [HEALTHCARE FACILITY NAME]
+## DOCUMENT TYPE: ${documentName.toUpperCase()}
+**Title**: [Professional Document Title]
+**Document Code**: GAHAR-DOC-001
+**Effective Date**: March 2025 | **Review Cycle**: Annual | **Version**: 1.0
+**Target Departments**: All Applicable Hospital Departments
+
+---
+### 1. 📌 SCOPE & APPLICABILITY (النطاق والتطبيق)
+### 2. 🎯 PURPOSE & INTENT (الهدف والغرض)
+### 3. 📖 DEFINITIONS & ACRONYMS (التعاريف والمصطلحات)
+### 4. ⚖️ POLICY STATEMENT & CORE PRINCIPLES (السياسة والترخيص)
+### 5. 🛠️ OPERATIONAL PROCEDURES & WORKFLOW (إجراءات العمل الفعالة)
+### 6. 👥 RESPONSIBILITIES & ROLES (المسؤوليات والأدوار)
+### 7. 📊 MONITORING, KPI & COMPLIANCE (المتابعة ومؤشرات الأداء)
+### 8. 📁 RELATED FORMS & RECORDS (النماذج والأدلة ذات الصلة)
+### 9. 📚 GAHAR REFERENCES & CODES (المراجع ومعايير جهار)
+
+Ensure all content directly reflects official GAHAR principles from this context:
+$context
+''';
+
+      case AssistantMode.documentReview:
+        final docToReview = pastedDocument ?? query;
+        return '''
+You are a Chief GAHAR Accreditation Surveyor and Auditor.
+Conduct a rigorous **Document Compliance Audit** on the following hospital document against GAHAR Standards:
+
+---
+[DOCUMENT TO AUDIT]:
+$docToReview
+---
+
+[GAHAR REFERENCE STANDARDS CONTEXT]:
+$context
+
+Provide a comprehensive Audit Report containing:
+
+1. 📊 **COMPLIANCE SCORE (درجة التوافق)**: `[Score 0-100%]` (Met / Partially Met / Unmet)
+2. ✅ **COMPLIANT ELEMENTS FOUND (نقاط القوة والتوافق)**
+3. ❌ **MISSING REQUIREMENTS & GAPS (الثغرات والمتطلبات الناقصة)**
+4. ⚠️ **SURVEYOR FINDINGS & RISK LEVEL (ملاحظات المقيم ومستوى الخطورة)**
+5. 💡 **ACTIONABLE REVISION RECOMMENDATIONS (التوصيات والتعديلات المطلوبة)**
+''';
+
+      case AssistantMode.evidenceGenerator:
+        return '''
+You are a GAHAR Accreditation Evidence Coordinator.
+Generate a complete **Accreditation Evidence Checklist (قائمة أدلة الإثبات للجمهور والمقيم)** for: "$query".
+
+Categorize the required evidence items into:
+1. 📝 **Governance & Authorization Evidence (أدلة التراخيص والاعتمادات)**
+2. 🤝 **Meeting Minutes & Records (محاضر الاجتماعات اللجان)**
+3. 🎓 **Staff Competency & Training Evidence (أدلة تدريب وتقييم الكوادر)**
+4. 📋 **Operational Logs & Checklists (سجلات التنفيذ وسجلات الفحص)**
+5. 📊 **Monitoring & KPI Reports (تقارير المؤشرات والتحسين)**
+
+Ground all items in retrieved GAHAR context:
+$context
+''';
+
+      case AssistantMode.taskPlanner:
+        return '''
+You are a Quality & Accreditation Project Planner.
+Convert GAHAR requirements for "$query" into an **Actionable Task Breakdown & Committee Assignment Matrix**.
+
+Generate a structured task table and breakdown:
+
+| Task ID | Actionable Task | Responsible Department | Assigned Role | Priority | Due Window | Required Evidence | Committee Approval |
+|---------|-----------------|------------------------|---------------|----------|------------|-------------------|--------------------|
+
+Followed by detailed implementation notes for each task.
+
+Reference GAHAR Context:
+$context
+''';
+
+      case AssistantMode.trainingAssistant:
+        return '''
+You are a Healthcare Staff Training Coordinator for GAHAR Standards.
+Generate a complete **Staff Education & Competency Pack** for: "$query".
+
+Include 5 complete modules:
+1. 📅 **Training Plan & Target Audience (خطة التدريب والفئات المستهدفة)**
+2. 🖥️ **Presentation Slides Outline (محتوى شرائح العرض - 5 شرائح)**
+3. ✍️ **Attendance Log Format (نموذج كشف الحضور)**
+4. 📝 **5-Question Staff Evaluation Quiz with Answer Key (اختبار تقييم استيعاب من 5 أسئلة مع الإجابات النموذجية)**
+5. 📋 **Staff Competency Assessment Checklist (قائمة تقييم الجدارة الفردية الميدانية)**
+
+Alignment with GAHAR Standards Context:
+$context
+''';
+
+      case AssistantMode.gapAnalysis:
+        return '''
+You are an Accreditation Risk & Gap Analysis Specialist.
+Perform a **Gap Analysis & Risk Matrix Evaluation** for an organization implementing GAHAR standards for: "$query".
+
+Provide a structured report:
+1. 🔍 **Current State vs GAHAR Requirement Assessment (تقييم الوضع الحالي مقارنة بالمعيار)**
+2. ⚠️ **Gap Identification & Missing Controls (تحديد الفجوات والقصور)**
+3. 🎯 **Risk Matrix (مصفوفة المخاطر - Impact vs Likelihood)**
+4. 📌 **Priority Matrix (أولويات المعالجة)**
+5. 🚀 **Corrective & Preventive Action Plan - CAPA (خطة الإجراءات التصحيحية)**
+
+Reference GAHAR Context:
+$context
+''';
     }
-    final match2 = RegExp(r"Page\s+(\d+)", caseSensitive: false).firstMatch(text);
-    if (match2 != null) {
-      return int.tryParse(match2.group(1) ?? "");
-    }
-    return null;
   }
 
-  Future<void> _sendAiQuery(String query) async {
+  Future<void> _sendAiQuery(String query, {String? pastedDocument}) async {
+    final mode = _activeAssistantMode;
+    final docType = _selectedDocType.label;
+
     setState(() {
-      _messages.add(ChatMessage(text: query, isUser: true));
+      _messages.add(ChatMessage(
+        text: pastedDocument != null
+            ? '🔍 Auditing Document: "${query.isEmpty ? "Submitted Document" : query}"'
+            : query,
+        isUser: true,
+      ));
       _aiLoading = true;
     });
     _scrollToBottom();
 
     try {
-      // 1. Get Groq API key from settings
       final groqKey = await AppSettings.getGroqKey();
 
       if (groqKey.isEmpty) {
@@ -699,19 +1197,21 @@ class _ChatScreenState extends State<ChatScreen> {
         );
       }
 
-      // 2. Use local BM25 engine to find relevant bylaws sections (RAG)
-      final searchResults = _engine.search(query, topK: 5);
+      // RAG Retrieval from GAHAR Handbook
+      final searchResults = _engine.search(
+          query.isEmpty ? "GAHAR Hospital Accreditation Standards 2025" : query,
+          topK: 5);
       final context = searchResults.isNotEmpty
           ? searchResults.map((r) => r.text).join('\n\n')
-          : 'No specific bylaws sections found for this query.';
+          : 'GAHAR Hospital Accreditation Standards 2025 General Requirements.';
 
-      // 3. Call Groq API directly (no server needed!)
-      const systemPrompt =
-          'You are a helpful academic advisor for FCIT (Faculty of Computing and Information Technology). '
-          'You answer questions about the faculty bylaws and regulations. '
-          'Use the provided context from the official bylaws document to answer accurately. '
-          'If the context does not contain enough information, say so honestly. '
-          'Be concise, clear, and helpful. You can answer in Arabic or English based on the question language.';
+      final userPromptContent = _buildPromptForMode(
+        mode: mode,
+        query: query,
+        context: context,
+        docType: docType,
+        pastedDocument: pastedDocument,
+      );
 
       final httpResponse = await http
           .post(
@@ -723,18 +1223,22 @@ class _ChatScreenState extends State<ChatScreen> {
             body: jsonEncode({
               'model': AppSettings.model,
               'messages': [
-                {'role': 'system', 'content': systemPrompt},
+                {
+                  'role': 'system',
+                  'content':
+                      'You are an expert Healthcare Accreditation Assistant for GAHAR 2025 Standards. Provide structured, authoritative, and practical guidance.',
+                },
                 {
                   'role': 'user',
-                  'content': 'Context from FCIT Bylaws:\n$context\n\nQuestion: $query',
+                  'content': userPromptContent,
                 },
               ],
-              'max_tokens': 1024,
+              'max_tokens': 2048,
               'temperature': 0.3,
             }),
           )
           .timeout(
-            const Duration(seconds: 45),
+            const Duration(seconds: 60),
             onTimeout: () => throw Exception(
               'Request timed out. Please check your internet connection.',
             ),
@@ -748,10 +1252,15 @@ class _ChatScreenState extends State<ChatScreen> {
 
       final data = jsonDecode(httpResponse.body) as Map<String, dynamic>;
       final reply = data['choices']?[0]?['message']?['content'] as String? ??
-          'No reply received.';
+          'No response generated.';
 
       setState(() {
-        _messages.add(ChatMessage(text: reply, isUser: false, isAi: true));
+        _messages.add(ChatMessage(
+          text: reply,
+          isUser: false,
+          isAi: true,
+          assistantMode: mode,
+        ));
         _aiLoading = false;
       });
     } catch (e) {
@@ -762,6 +1271,7 @@ class _ChatScreenState extends State<ChatScreen> {
           text: '❌ Error: $errMsg',
           isUser: false,
           isAi: true,
+          assistantMode: mode,
         ));
         _aiLoading = false;
       });
@@ -775,7 +1285,11 @@ class _ChatScreenState extends State<ChatScreen> {
     _controller.clear();
 
     if (_chatMode == ChatMode.aiAssistant) {
-      _sendAiQuery(query);
+      if (_activeAssistantMode == AssistantMode.documentReview) {
+        _showDocumentReviewSheet(initialTopic: query);
+      } else {
+        _sendAiQuery(query);
+      }
     } else {
       final results = _engine.search(query, topK: 4);
 
@@ -790,6 +1304,227 @@ class _ChatScreenState extends State<ChatScreen> {
       });
       _scrollToBottom();
     }
+  }
+
+  void _showDocumentReviewSheet({String? initialTopic}) {
+    final docController = TextEditingController();
+    final topicController = TextEditingController(text: initialTopic ?? '');
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        final cs = Theme.of(context).colorScheme;
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+
+        return Padding(
+          padding:
+              EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+          child: Container(
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF16162A) : Colors.white,
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(24)),
+              border: Border.all(
+                color: isDark
+                    ? const Color(0xFF7C6FF7).withValues(alpha: 0.2)
+                    : const Color(0xFF5B4FCF).withValues(alpha: 0.15),
+              ),
+            ),
+            padding: const EdgeInsets.all(24),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.white24 : Colors.black12,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Row(
+                    children: [
+                      Icon(Icons.fact_check_rounded,
+                          color: cs.primary, size: 24),
+                      const SizedBox(width: 10),
+                      Text(
+                        'Audit Existing Document',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: isDark ? Colors.white : Colors.black87,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Paste your hospital policy or procedure text below. The AI will audit it against official GAHAR 2025 standards and provide a Compliance Score (0-100%) and gap recommendations.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isDark ? Colors.white60 : Colors.black54,
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: topicController,
+                    decoration: InputDecoration(
+                      labelText: 'Standard / Topic Title (Optional)',
+                      hintText:
+                          'e.g. Infection Control Policy, Patient Consent',
+                      filled: true,
+                      fillColor: isDark
+                          ? const Color(0xFF0B0B16)
+                          : const Color(0xFFF3F3FA),
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: docController,
+                    maxLines: 7,
+                    decoration: InputDecoration(
+                      labelText: 'Paste Document Content Here',
+                      hintText:
+                          'Paste policy text, SOP steps, or procedure details...',
+                      filled: true,
+                      fillColor: isDark
+                          ? const Color(0xFF0B0B16)
+                          : const Color(0xFFF3F3FA),
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      final docText = docController.text.trim();
+                      if (docText.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                              content:
+                                  Text('Please paste document content to audit.')),
+                        );
+                        return;
+                      }
+                      Navigator.pop(context);
+                      setState(() {
+                        _chatMode = ChatMode.aiAssistant;
+                        _activeAssistantMode = AssistantMode.documentReview;
+                      });
+                      _sendAiQuery(
+                        topicController.text.trim().isEmpty
+                            ? 'Document Audit'
+                            : topicController.text.trim(),
+                        pastedDocument: docText,
+                      );
+                    },
+                    icon: const Icon(Icons.analytics_rounded),
+                    label: const Text('Audit Document Compliance'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: cs.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showSaveDocumentDialog(ChatMessage msg) {
+    final titleController = TextEditingController(
+      text: '${_selectedDocType.label} - GAHAR Compliance',
+    );
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        final cs = Theme.of(context).colorScheme;
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+
+        return AlertDialog(
+          title: const Text('Save to Document Library'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextField(
+                controller: titleController,
+                decoration: InputDecoration(
+                  labelText: 'Document Title',
+                  filled: true,
+                  fillColor:
+                      isDark ? const Color(0xFF16162A) : const Color(0xFFF3F3FA),
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Type: ${_selectedDocType.label}',
+                style: TextStyle(
+                    fontSize: 11, color: isDark ? Colors.white60 : Colors.black54),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton.icon(
+              onPressed: () async {
+                final doc = SavedDocument(
+                  id: DateTime.now().millisecondsSinceEpoch.toString(),
+                  title: titleController.text.trim().isEmpty
+                      ? 'Saved GAHAR Document'
+                      : titleController.text.trim(),
+                  content: msg.text,
+                  docType: _selectedDocType.label,
+                  standard: 'GAHAR 2025',
+                  department: 'General Hospital',
+                  createdAt: DateTime.now(),
+                );
+                await StorageService.saveDocument(doc);
+                if (mounted) {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Document saved to Library! 📁'),
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                }
+              },
+              icon: const Icon(Icons.bookmark_added_rounded, size: 16),
+              label: const Text('Save Document'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: cs.primary,
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   Future<void> _speak(String text) async {
@@ -861,6 +1596,11 @@ class _ChatScreenState extends State<ChatScreen> {
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
+    final activeTool = kAssistantTools.firstWhere(
+      (t) => t.mode == _activeAssistantMode,
+      orElse: () => kAssistantTools.first,
+    );
+
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: AppBar(
@@ -880,32 +1620,33 @@ class _ChatScreenState extends State<ChatScreen> {
               height: 38,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [cs.primary, cs.secondary],
+                  colors: [activeTool.accentColor, cs.secondary],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
                 borderRadius: BorderRadius.circular(11),
                 boxShadow: [
                   BoxShadow(
-                    color: cs.primary.withValues(alpha: 0.25),
+                    color: activeTool.accentColor.withValues(alpha: 0.3),
                     blurRadius: 8,
                     offset: const Offset(0, 2),
                   ),
                 ],
               ),
-              child: const Icon(Icons.school_rounded, color: Colors.white, size: 20),
+              child: Icon(activeTool.icon, color: Colors.white, size: 20),
             ),
             const SizedBox(width: 11),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text("FCIT Bylaws", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                const Text("GAHAR Assistant",
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 Text(
                   _loading
-                      ? "Loading bylaws..."
+                      ? "Loading GAHAR Standards..."
                       : (_chatMode == ChatMode.offlineSearch
-                          ? "✓ Offline Search active"
-                          : "⚡ AI Chatbot direct mode"),
+                          ? "✓ Offline BM25 Search"
+                          : "⚡ ${activeTool.title} Mode"),
                   style: TextStyle(
                       fontSize: 10.5,
                       color: _loading
@@ -931,16 +1672,19 @@ class _ChatScreenState extends State<ChatScreen> {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text(_chatMode == ChatMode.offlineSearch
-                      ? "Switched to Offline Search"
-                      : "Switched to direct AI Chatbot"),
+                      ? "Switched to Offline BM25 Search"
+                      : "Switched to AI Accreditation Assistant"),
                   duration: const Duration(seconds: 2),
                 ),
               );
             },
-            tooltip: _chatMode == ChatMode.offlineSearch ? "Use AI Chatbot" : "Use Offline Search",
+            tooltip: _chatMode == ChatMode.offlineSearch
+                ? "Switch to AI Assistant"
+                : "Switch to Offline Search",
           ),
           IconButton(
-            icon: Icon(isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined),
+            icon: Icon(
+                isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined),
             onPressed: () => MyApp.of(context)?.toggleTheme(),
             tooltip: "Toggle Theme",
           ),
@@ -963,6 +1707,10 @@ class _ChatScreenState extends State<ChatScreen> {
           SafeArea(
             child: Column(
               children: [
+                if (_chatMode == ChatMode.aiAssistant) _buildToolSelectorBar(cs),
+                if (_chatMode == ChatMode.aiAssistant &&
+                    _activeAssistantMode == AssistantMode.documentGenerator)
+                  _buildDocTypeSubBar(cs),
                 Expanded(
                   child: _loading
                       ? _buildLoadingView(cs)
@@ -982,6 +1730,91 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
+  Widget _buildToolSelectorBar(ColorScheme cs) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      height: 44,
+      margin: const EdgeInsets.only(top: 4, bottom: 4),
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        itemCount: kAssistantTools.length,
+        itemBuilder: (context, index) {
+          final tool = kAssistantTools[index];
+          final isSelected = tool.mode == _activeAssistantMode;
+
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: ChoiceChip(
+              avatar: Icon(
+                tool.icon,
+                size: 16,
+                color: isSelected ? Colors.white : tool.accentColor,
+              ),
+              label: Text(tool.title),
+              labelStyle: TextStyle(
+                fontSize: 12,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                color: isSelected
+                    ? Colors.white
+                    : (isDark ? Colors.white70 : Colors.black87),
+              ),
+              selected: isSelected,
+              selectedColor: tool.accentColor,
+              backgroundColor: isDark
+                  ? const Color(0xFF16162A).withValues(alpha: 0.7)
+                  : Colors.white,
+              onSelected: (selected) {
+                if (selected) {
+                  setState(() {
+                    _activeAssistantMode = tool.mode;
+                  });
+                  if (tool.mode == AssistantMode.documentReview) {
+                    _showDocumentReviewSheet();
+                  }
+                }
+              },
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildDocTypeSubBar(ColorScheme cs) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      height: 38,
+      margin: const EdgeInsets.only(bottom: 6),
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        itemCount: AccreditationDocType.values.length,
+        itemBuilder: (context, index) {
+          final docType = AccreditationDocType.values[index];
+          final isSelected = docType == _selectedDocType;
+
+          return Padding(
+            padding: const EdgeInsets.only(right: 6),
+            child: FilterChip(
+              label: Text(docType.label, style: const TextStyle(fontSize: 11)),
+              selected: isSelected,
+              selectedColor: cs.primary.withValues(alpha: 0.3),
+              backgroundColor: isDark
+                  ? const Color(0xFF121224)
+                  : const Color(0xFFEFEFF8),
+              onSelected: (selected) {
+                if (selected) {
+                  setState(() => _selectedDocType = docType);
+                }
+              },
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   Widget _buildLoadingView(ColorScheme cs) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Center(
@@ -995,8 +1828,9 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
           const SizedBox(height: 20),
           Text(
-            "Loading FCIT Bylaws...",
-            style: TextStyle(color: isDark ? Colors.white60 : Colors.black54, fontSize: 14),
+            "Loading GAHAR Accreditation Handbook...",
+            style: TextStyle(
+                color: isDark ? Colors.white60 : Colors.black54, fontSize: 14),
           ),
         ],
       ),
@@ -1006,22 +1840,21 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget _buildWelcomeView(ColorScheme cs) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       children: [
-        const SizedBox(height: 20),
         Center(
           child: Column(
             children: [
               Container(
-                width: 90,
-                height: 90,
+                width: 76,
+                height: 76,
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [cs.primary, cs.secondary],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
-                  borderRadius: BorderRadius.circular(24),
+                  borderRadius: BorderRadius.circular(22),
                   boxShadow: [
                     BoxShadow(
                       color: cs.primary.withValues(alpha: 0.3),
@@ -1030,71 +1863,253 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                   ],
                 ),
-                child: const Icon(Icons.school_rounded, size: 48, color: Colors.white),
+                child: const Icon(Icons.health_and_safety_rounded,
+                    size: 42, color: Colors.white),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
               Text(
-                "FCIT Bylaws Explorer",
+                "GAHAR AI Accreditation Assistant",
                 style: TextStyle(
-                  fontSize: 24, 
+                  fontSize: 20,
                   fontWeight: FontWeight.bold,
                   color: isDark ? Colors.white : Colors.black87,
                 ),
+                textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 8),
               Text(
-                "Browse and query all Faculty regulations instantly on your device.\nUse the offline search or enable AI assistant in settings.",
+                "Complete AI suite for GAHAR 2025 Hospital Accreditation compliance.\nSearch, explain standards, generate policies, audit docs & plan tasks.",
                 textAlign: TextAlign.center,
                 style: TextStyle(
                     color: isDark ? Colors.white60 : Colors.black54,
-                    height: 1.5,
-                    fontSize: 13.5),
+                    height: 1.4,
+                    fontSize: 12.5),
               ),
             ],
           ),
         ),
-        const SizedBox(height: 28),
+        const SizedBox(height: 20),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            _featureChip(cs, Icons.wifi_off, "100% Offline"),
+            _featureChip(cs, Icons.menu_book, "GAHAR 2025 RAG"),
             const SizedBox(width: 8),
-            _featureChip(cs, Icons.auto_awesome, "Direct Gemini"),
+            _featureChip(cs, Icons.auto_awesome, "Groq AI Engine"),
             const SizedBox(width: 8),
-            _featureChip(cs, Icons.lock_outline, "Private"),
+            _featureChip(cs, Icons.description, "14+ Doc Generators"),
           ],
         ),
-        const SizedBox(height: 32),
+        const SizedBox(height: 24),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              "Accreditation AI Assistant Suite:",
+              style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.white.withValues(alpha: 0.8) : Colors.black87,
+                  fontSize: 13.5),
+            ),
+            Text(
+              "Tap to launch",
+              style: TextStyle(
+                  fontSize: 11,
+                  color: isDark ? Colors.white38 : Colors.black45),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        // Responsive Grid of 9 Assistant Tools
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final isDesktop = constraints.maxWidth > 650;
+            final crossCount = isDesktop ? 3 : 2;
+            final ratio = isDesktop ? 1.6 : 1.15;
+
+            return GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: crossCount,
+                crossAxisSpacing: 10,
+                mainAxisSpacing: 10,
+                childAspectRatio: ratio,
+              ),
+              itemCount: kAssistantTools.length,
+              itemBuilder: (context, index) {
+                final tool = kAssistantTools[index];
+                return _buildToolCard(tool, cs);
+              },
+            );
+          },
+        ),
+        const SizedBox(height: 20),
+        // Audit Banner Shortcut
+        InkWell(
+          onTap: () => _showDocumentReviewSheet(),
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  const Color(0xFFE57373).withValues(alpha: 0.15),
+                  cs.primary.withValues(alpha: 0.15)
+                ],
+              ),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: const Color(0xFFE57373).withValues(alpha: 0.3),
+              ),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.fact_check_rounded,
+                    color: Color(0xFFE57373), size: 28),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        "Audit Existing Hospital Document",
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 13),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        "Paste any policy text to analyze compliance against GAHAR & get a score %",
+                        style: TextStyle(
+                            fontSize: 11,
+                            color: isDark ? Colors.white60 : Colors.black54),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.arrow_forward_ios_rounded, size: 14),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
         Text(
-          "Quick search topics:",
+          "Quick Questions:",
           style: TextStyle(
               fontWeight: FontWeight.bold,
               color: isDark ? Colors.white70 : Colors.black87,
-              fontSize: 14),
+              fontSize: 13),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
         ..._suggestions.map((s) => _buildSuggestionTile(s, cs)),
       ],
+    );
+  }
+
+  Widget _buildToolCard(AssistantToolInfo tool, ColorScheme cs) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isSelected = tool.mode == _activeAssistantMode;
+
+    return InkWell(
+      onTap: () {
+        setState(() {
+          _chatMode = ChatMode.aiAssistant;
+          _activeAssistantMode = tool.mode;
+        });
+        if (tool.mode == AssistantMode.documentReview) {
+          _showDocumentReviewSheet();
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text("Activated ${tool.title} Mode. Type a topic below!"),
+              duration: const Duration(seconds: 1),
+            ),
+          );
+        }
+      },
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? tool.accentColor.withValues(alpha: 0.25)
+              : (isDark
+                  ? const Color(0xFF16162A).withValues(alpha: 0.6)
+                  : Colors.white),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isSelected
+                ? tool.accentColor
+                : (isDark
+                    ? const Color(0xFF7C6FF7).withValues(alpha: 0.12)
+                    : Colors.black.withValues(alpha: 0.08)),
+            width: isSelected ? 1.8 : 1,
+          ),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: tool.accentColor.withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(tool.icon, color: tool.accentColor, size: 20),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              tool.title,
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                color: isDark ? Colors.white : Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              tool.arabicTitle,
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 9.5,
+                color: isDark ? Colors.white.withValues(alpha: 0.5) : Colors.black45,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
   Widget _featureChip(ColorScheme cs, IconData icon, String label) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1E1E38).withValues(alpha: 0.5) : cs.primary.withValues(alpha: 0.08),
+        color: isDark
+            ? const Color(0xFF1E1E38).withValues(alpha: 0.5)
+            : cs.primary.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: isDark ? const Color(0xFF7C6FF7).withValues(alpha: 0.15) : cs.primary.withValues(alpha: 0.15),
+          color: isDark
+              ? const Color(0xFF7C6FF7).withValues(alpha: 0.15)
+              : cs.primary.withValues(alpha: 0.15),
         ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: cs.primary),
-          const SizedBox(width: 6),
-          Text(label, style: TextStyle(fontSize: 11, color: isDark ? Colors.white70 : cs.primary, fontWeight: FontWeight.w500)),
+          Icon(icon, size: 13, color: cs.primary),
+          const SizedBox(width: 5),
+          Text(label,
+              style: TextStyle(
+                  fontSize: 10.5,
+                  color: isDark ? Colors.white70 : cs.primary,
+                  fontWeight: FontWeight.w500)),
         ],
       ),
     );
@@ -1108,28 +2123,36 @@ class _ChatScreenState extends State<ChatScreen> {
         onTap: () => _sendMessage(text),
         borderRadius: BorderRadius.circular(16),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
             border: Border.all(
-              color: isDark ? const Color(0xFF7C6FF7).withValues(alpha: 0.15) : cs.outline.withValues(alpha: 0.2),
+              color: isDark
+                  ? const Color(0xFF7C6FF7).withValues(alpha: 0.15)
+                  : cs.outline.withValues(alpha: 0.2),
             ),
             borderRadius: BorderRadius.circular(16),
-            color: isDark ? const Color(0xFF16162A).withValues(alpha: 0.5) : cs.surface.withValues(alpha: 0.6),
+            color: isDark
+                ? const Color(0xFF16162A).withValues(alpha: 0.5)
+                : cs.surface.withValues(alpha: 0.6),
           ),
           child: Row(
             children: [
-              Icon(Icons.search_rounded, size: 18, color: cs.primary),
-              const SizedBox(width: 12),
+              Icon(Icons.search_rounded, size: 16, color: cs.primary),
+              const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  text, 
+                  text,
                   style: TextStyle(
-                    fontSize: 14,
-                    color: isDark ? Colors.white.withValues(alpha: 0.8) : Colors.black87,
+                    fontSize: 13,
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.8)
+                        : Colors.black87,
                   ),
                 ),
               ),
-              Icon(Icons.north_west_rounded, size: 14, color: isDark ? Colors.white30 : Colors.black26),
+              Icon(Icons.north_west_rounded,
+                  size: 13,
+                  color: isDark ? Colors.white30 : Colors.black26),
             ],
           ),
         ),
@@ -1166,7 +2189,9 @@ class _ChatScreenState extends State<ChatScreen> {
         margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF16162A).withValues(alpha: 0.7) : Colors.white.withValues(alpha: 0.9),
+          color: isDark
+              ? const Color(0xFF16162A).withValues(alpha: 0.7)
+              : Colors.white.withValues(alpha: 0.9),
           borderRadius: const BorderRadius.only(
             topLeft: Radius.circular(4),
             topRight: Radius.circular(18),
@@ -1174,7 +2199,9 @@ class _ChatScreenState extends State<ChatScreen> {
             bottomRight: Radius.circular(18),
           ),
           border: Border.all(
-            color: isDark ? const Color(0xFF7C6FF7).withValues(alpha: 0.15) : const Color(0xFF5B4FCF).withValues(alpha: 0.1),
+            color: isDark
+                ? const Color(0xFF7C6FF7).withValues(alpha: 0.15)
+                : const Color(0xFF5B4FCF).withValues(alpha: 0.1),
             width: 1.5,
           ),
         ),
@@ -1185,13 +2212,15 @@ class _ChatScreenState extends State<ChatScreen> {
               child: SizedBox(
                 width: 14,
                 height: 14,
-                child: CircularProgressIndicator(strokeWidth: 2, color: cs.primary),
+                child:
+                    CircularProgressIndicator(strokeWidth: 2, color: cs.primary),
               ),
             ),
             const SizedBox(width: 10),
             Text(
-              "Thinking...",
-              style: TextStyle(fontSize: 13, color: isDark ? Colors.white60 : Colors.black54),
+              "Generating Accreditation Response...",
+              style: TextStyle(
+                  fontSize: 13, color: isDark ? Colors.white60 : Colors.black54),
             ),
           ],
         ),
@@ -1201,14 +2230,22 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _buildAiResponseBubble(ChatMessage msg, ColorScheme cs) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final modeInfo = kAssistantTools.firstWhere(
+      (t) => t.mode == msg.assistantMode,
+      orElse: () => kAssistantTools.first,
+    );
+
     return Align(
       alignment: Alignment.centerLeft,
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
-        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.85),
+        constraints:
+            BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.88),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF16162A).withValues(alpha: 0.7) : Colors.white.withValues(alpha: 0.9),
+          color: isDark
+              ? const Color(0xFF16162A).withValues(alpha: 0.85)
+              : Colors.white.withValues(alpha: 0.95),
           borderRadius: const BorderRadius.only(
             topLeft: Radius.circular(4),
             topRight: Radius.circular(18),
@@ -1216,7 +2253,7 @@ class _ChatScreenState extends State<ChatScreen> {
             bottomRight: Radius.circular(18),
           ),
           border: Border.all(
-            color: isDark ? const Color(0xFF7C6FF7).withValues(alpha: 0.15) : const Color(0xFF5B4FCF).withValues(alpha: 0.1),
+            color: modeInfo.accentColor.withValues(alpha: 0.4),
             width: 1.5,
           ),
           boxShadow: [
@@ -1232,23 +2269,72 @@ class _ChatScreenState extends State<ChatScreen> {
           children: [
             Row(
               children: [
-                Icon(Icons.auto_awesome_rounded, size: 15, color: cs.secondary),
+                Icon(modeInfo.icon, size: 16, color: modeInfo.accentColor),
                 const SizedBox(width: 6),
-                Text(
-                  "AI Assistant",
-                  style: TextStyle(fontSize: 12, color: cs.secondary, fontWeight: FontWeight.bold),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: modeInfo.accentColor.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    modeInfo.title,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: modeInfo.accentColor,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
                 const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.bookmark_add_outlined, size: 17),
+                  onPressed: () => _showSaveDocumentDialog(msg),
+                  tooltip: "Save to Library",
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+                const SizedBox(width: 10),
+                IconButton(
+                  icon: const Icon(Icons.share_outlined, size: 17),
+                  onPressed: () =>
+                      ExportService.sharePdf(modeInfo.title, msg.text),
+                  tooltip: "Export / Share PDF",
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+                const SizedBox(width: 10),
+                IconButton(
+                  icon: const Icon(Icons.copy_rounded, size: 16),
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(text: msg.text));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text("Copied response to clipboard!"),
+                        duration: Duration(seconds: 1),
+                      ),
+                    );
+                  },
+                  tooltip: "Copy Text",
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+                const SizedBox(width: 10),
                 GestureDetector(
                   onTap: () => _speak(msg.text),
-                  child: Icon(Icons.volume_up_outlined, size: 16, color: cs.primary),
+                  child: Icon(Icons.volume_up_outlined,
+                      size: 16, color: cs.primary),
                 ),
               ],
             ),
             const SizedBox(height: 10),
-            Text(
+            SelectableText(
               msg.text,
-              style: TextStyle(fontSize: 14, color: isDark ? const Color(0xFFE0E0E0) : Colors.black87, height: 1.5),
+              style: TextStyle(
+                  fontSize: 13.5,
+                  color: isDark ? const Color(0xFFE0E0E0) : Colors.black87,
+                  height: 1.5),
             ),
           ],
         ),
@@ -1451,12 +2537,58 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _buildInputBar(ColorScheme cs) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    // Context-aware placeholder text based on active mode
+    String hintText;
+    IconData prefixIcon;
+    if (_loading) {
+      hintText = "Loading GAHAR Accreditation Handbook...";
+      prefixIcon = Icons.hourglass_empty_rounded;
+    } else if (_chatMode == ChatMode.offlineSearch) {
+      hintText = "Search GAHAR standards (IPC, PCC, GSR...)";
+      prefixIcon = Icons.search_rounded;
+    } else {
+      switch (_activeAssistantMode) {
+        case AssistantMode.aiConsultant:
+          hintText = "Ask any accreditation question...";
+          prefixIcon = Icons.psychology_rounded;
+        case AssistantMode.standardsReference:
+          hintText = "Enter standard code or topic (e.g. PCC.06)...";
+          prefixIcon = Icons.menu_book_rounded;
+        case AssistantMode.implementationRoadmap:
+          hintText = "Enter standard to generate 10-step roadmap...";
+          prefixIcon = Icons.alt_route_rounded;
+        case AssistantMode.documentGenerator:
+          hintText = "Enter topic to generate ${_selectedDocType.label}...";
+          prefixIcon = Icons.description_rounded;
+        case AssistantMode.documentReview:
+          hintText = "Tap to open document audit panel...";
+          prefixIcon = Icons.fact_check_rounded;
+        case AssistantMode.evidenceGenerator:
+          hintText = "Enter standard to generate evidence checklist...";
+          prefixIcon = Icons.inventory_2_rounded;
+        case AssistantMode.taskPlanner:
+          hintText = "Enter standard to generate task & responsibility plan...";
+          prefixIcon = Icons.task_alt_rounded;
+        case AssistantMode.trainingAssistant:
+          hintText = "Enter topic to generate training & competency pack...";
+          prefixIcon = Icons.model_training_rounded;
+        case AssistantMode.gapAnalysis:
+          hintText = "Enter standard for gap analysis & risk matrix...";
+          prefixIcon = Icons.analytics_rounded;
+      }
+    }
+
     return Container(
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF16162A).withValues(alpha: 0.85) : const Color(0xFFFFFFFF).withValues(alpha: 0.9),
+        color: isDark
+            ? const Color(0xFF16162A).withValues(alpha: 0.85)
+            : const Color(0xFFFFFFFF).withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(28),
         border: Border.all(
-          color: isDark ? const Color(0xFF7C6FF7).withValues(alpha: 0.2) : const Color(0xFF5B4FCF).withValues(alpha: 0.15),
+          color: isDark
+              ? const Color(0xFF7C6FF7).withValues(alpha: 0.2)
+              : const Color(0xFF5B4FCF).withValues(alpha: 0.15),
           width: 1.5,
         ),
         boxShadow: [
@@ -1478,18 +2610,19 @@ class _ChatScreenState extends State<ChatScreen> {
               textInputAction: TextInputAction.search,
               onSubmitted: (_) => _sendMessage(),
               enabled: !_loading,
-              style: TextStyle(fontSize: 14, color: isDark ? Colors.white : Colors.black87),
+              style: TextStyle(
+                  fontSize: 14, color: isDark ? Colors.white : Colors.black87),
               decoration: InputDecoration(
-                hintText: _loading
-                    ? "Loading regulations..."
-                    : (_chatMode == ChatMode.offlineSearch
-                        ? "Search bylaws (GPA, graduation...)"
-                        : "Ask AI Assistant about bylaws..."),
-                hintStyle: TextStyle(fontSize: 13, color: isDark ? Colors.white30 : Colors.black38),
+                hintText: hintText,
+                hintStyle: TextStyle(
+                    fontSize: 13,
+                    color: isDark ? Colors.white30 : Colors.black38),
                 border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 filled: false,
-                prefixIcon: Icon(Icons.search_rounded, color: isDark ? Colors.white30 : Colors.black38, size: 20),
+                prefixIcon: Icon(prefixIcon,
+                    color: isDark ? Colors.white30 : Colors.black38, size: 20),
               ),
             ),
           ),

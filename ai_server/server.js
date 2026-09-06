@@ -457,6 +457,112 @@ app.post("/ask", async (req, res) => {
   }
 });
 
+// ─── Platform REST API Endpoints ──────────────────────────────────────────────
+app.post("/api/auth/login", (req, res) => {
+  const { email, password } = req.body;
+  if (email === "admin@gahar.eg" || email === "admin") {
+    return res.json({
+      success: true,
+      token: "super_admin_token_secure",
+      user: {
+        id: "admin_001",
+        email: "admin@gahar.eg",
+        fullName: "Platform Super Admin",
+        role: "superAdmin",
+        facilityId: "platform_root",
+      },
+    });
+  }
+
+  res.json({
+    success: true,
+    token: `token_${Date.now()}`,
+    user: {
+      id: `usr_${Date.now()}`,
+      email: email || "user@hospital.eg",
+      fullName: "Hospital Quality Director",
+      role: "qualityManager",
+      facilityId: "fac_default",
+    },
+  });
+});
+
+app.post("/api/auth/register-facility", (req, res) => {
+  const data = req.body;
+  console.log("🏢 New Facility Registration Request Received:", data.facilityName);
+
+  res.status(201).json({
+    success: true,
+    message: "Registration submitted successfully. Pending Super Admin verification.",
+    facilityId: `fac_${Date.now()}`,
+  });
+});
+
+app.post("/api/ai/copilot", async (req, res) => {
+  const { prompt, screenContext, entityData } = req.body;
+  console.log(`🤖 AI Copilot Context Query [${screenContext}]: "${prompt}"`);
+
+  let reply = "";
+  const systemPrompt = `You are the GAHAR AI Copilot for Healthcare Accreditation in Egypt.
+Current Screen/Context: "${screenContext}".
+Entity Data: ${JSON.stringify(entityData || {})}.
+Provide expert, structured, clear guidance for the healthcare quality team in Arabic or English based on the user prompt.`;
+
+  if (groq) {
+    try {
+      const groqModel = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
+      const completion = await groq.chat.completions.create({
+        model: groqModel,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: prompt },
+        ],
+      });
+      reply = completion.choices[0].message?.content || "";
+    } catch (e) {
+      console.warn("⚠️ Groq copilot error:", e.message);
+    }
+  }
+
+  if (!reply) {
+    reply = `[GAHAR Copilot - ${screenContext}]: To achieve full compliance for ${screenContext}, ensure all GAHAR 2025 evidence of compliance (EOC) items are documented, reviewed by your quality committee, and verified prior to survey audit.`;
+  }
+
+  res.json({ reply });
+});
+
+app.get("/api/admin/facilities", (req, res) => {
+  res.json({
+    facilities: [
+      {
+        id: "fac_01",
+        name: "Cairo International Medical Center",
+        type: "Hospital (300 Beds)",
+        governorate: "Cairo",
+        plan: "Enterprise Multi-Branch",
+        status: "Active",
+      },
+      {
+        id: "fac_02",
+        name: "Alexandria Specialized Children Hospital",
+        type: "Specialized Hospital (120 Beds)",
+        governorate: "Alexandria",
+        plan: "Standard Hospital",
+        status: "Pending Approval",
+      },
+    ],
+  });
+});
+
+app.get("/api/admin/analytics", (req, res) => {
+  res.json({
+    totalFacilities: 42,
+    activeSubscriptions: 38,
+    pendingRegistrations: 4,
+    monthlyArrEgp: 185000,
+  });
+});
+
 app.listen(3000, () => {
   console.log("🚀 Server running on http://localhost:3000");
 });
