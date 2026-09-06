@@ -8,7 +8,10 @@ import '../models/hospital_profile.dart';
 import '../models/platform_models.dart';
 import '../models/saved_document.dart';
 
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+
 class StorageService {
+  static const FlutterSecureStorage _secureStorage = FlutterSecureStorage();
   static const String _profileKey = 'gahar_hospital_profile';
   static const String _docsKey = 'gahar_saved_documents';
   static const String _evidenceKey = 'gahar_evidence_items';
@@ -22,15 +25,17 @@ class StorageService {
   static const String _actionsKey = 'gahar_action_plans';
   static const String _licensesKey = 'gahar_licenses';
 
-  // ─── Authentication & User Session ─────────────────────────────────────────
+  // ─── Authentication & User Session (Secure Storage) ───────────────────────
   static Future<String?> getAuthToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_tokenKey);
+    try {
+      return await _secureStorage.read(key: _tokenKey);
+    } catch (_) {
+      return null;
+    }
   }
 
   static Future<void> saveAuthToken(String token) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_tokenKey, token);
+    await _secureStorage.write(key: _tokenKey, value: token);
   }
 
   static Future<UserProfile?> getUserProfile() async {
@@ -50,8 +55,8 @@ class StorageService {
   }
 
   static Future<void> clearSession() async {
+    await _secureStorage.delete(key: _tokenKey);
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_tokenKey);
     await prefs.remove(_userKey);
   }
 

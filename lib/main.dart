@@ -13,7 +13,6 @@ import 'models/platform_models.dart';
 import 'screens/compliance_dashboard_screen.dart';
 import 'screens/evidence_tracker_screen.dart';
 import 'screens/library_screen.dart';
-import 'screens/onboarding_screen.dart';
 import 'screens/applicability_screen.dart';
 import 'screens/gap_analysis_screen.dart';
 import 'screens/action_plans_screen.dart';
@@ -26,7 +25,6 @@ import 'screens/auth/login_screen.dart';
 import 'services/export_service.dart';
 import 'services/storage_service.dart';
 import 'theme/app_theme.dart';
-import 'widgets/ai_copilot_fab.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -2792,11 +2790,11 @@ class _AppSettingsSheetState extends State<AppSettingsSheet> {
               ),
               child: Row(
                 children: [
-                  Icon(Icons.info_outline_rounded, size: 16, color: cs.primary),
+                  Icon(Icons.shield_outlined, size: 16, color: cs.primary),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'The app uses Groq AI directly — no server needed! Get a free API key from console.groq.com',
+                      'AccrediGo AI Copilot operates securely through your enterprise backend server. API keys and credentials remain server-side.',
                       style: TextStyle(
                         fontSize: 12,
                         color: isDark ? Colors.white60 : Colors.black54,

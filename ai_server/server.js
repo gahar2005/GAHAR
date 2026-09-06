@@ -1,9 +1,19 @@
 const express = require("express");
 const cors = require("cors");
+const helmet = require("helmet");
 const fs = require("fs");
-const pdfjsLib = require("pdfjs-dist/legacy/build/pdf.mjs");
-
+const jwt = require("jsonwebtoken");
+const bcrypt = require("bcryptjs");
+const { v4: uuidv4 } = require("uuid");
 require("dotenv").config();
+
+const { query, memoryDb } = require("./db");
+const { 
+  sendFacilityRegistrationNotification, 
+  sendPaymentVerificationNotification, 
+  sendFacilityStatusNotification 
+} = require("./email_service");
+const { logAuditEvent } = require("./audit_service");
 
 const { OpenAI } = require("openai");
 const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
@@ -15,498 +25,443 @@ const Groq = require("groq-sdk");
 const groq = process.env.GROQ_API_KEY ? new Groq({ apiKey: process.env.GROQ_API_KEY }) : null;
 
 const app = express();
+app.use(helmet());
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "10mb" }));
 
-let pdfChunks = [];
-let rerankerModel = null;
-let rerankerTokenizer = null;
+const JWT_SECRET = process.env.JWT_SECRET || "accredigo_secure_production_jwt_secret_key_2026";
+const SUPER_ADMIN_EMAIL = process.env.SUPER_ADMIN_EMAIL || "admin@accredigo.eg";
 
-// Initialize reranker model using the low-level Transformers.js API
-async function initReranker() {
-  try {
-    console.log("⚡ Loading BAAI/bge-reranker-base model...");
-    // Dynamic import to support ESM inside CommonJS
-    const { AutoModelForSequenceClassification, AutoTokenizer } = await import("@xenova/transformers");
-    rerankerTokenizer = await AutoTokenizer.from_pretrained("Xenova/bge-reranker-base");
-    rerankerModel = await AutoModelForSequenceClassification.from_pretrained("Xenova/bge-reranker-base");
-    console.log("✅ Reranker model loaded successfully.");
-  } catch (e) {
-    console.error("❌ Failed to load reranker model:", e.message);
-    console.log("ℹ️ Will fall back to standard keyword retrieval without re-ranking.");
+// =============================================================================
+// Security & Authentication Middlewares
+// =============================================================================
+
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers["authorization"];
+  const token = authHeader && authHeader.split(" ")[1];
+
+  if (!token) {
+    return res.status(401).json({ success: false, message: "Authentication token required." });
   }
-}
 
-async function downloadPDF(url, path) {
-  try {
-    console.log(`⚡ Downloading PDF from: ${url}...`);
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-    const buffer = Buffer.from(await res.arrayBuffer());
-    fs.writeFileSync(path, buffer);
-    console.log("✅ PDF downloaded and saved to " + path);
-  } catch (error) {
-    console.error("❌ Failed to download PDF:", error.message);
-    console.log("ℹ️ Falling back to existing local file if available.");
-  }
-}
-
-function chunkText(pages, chunkSize = 350, overlap = 50) {
-  const chunks = [];
-  for (const page of pages) {
-    const words = page.text.trim().split(/\s+/).filter(w => w.length > 0);
-    if (words.length === 0) continue;
-
-    let i = 0;
-    while (i < words.length) {
-      const chunkWords = words.slice(i, i + chunkSize);
-      const text = chunkWords.join(" ");
-      chunks.push({
-        text,
-        page: page.pageNum,
-        part: page.part,
-        article: page.article
-      });
-
-      i += (chunkSize - overlap);
-
-      if (i >= words.length || chunkWords.length < chunkSize) {
-        break;
-      }
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) {
+      return res.status(403).json({ success: false, message: "Invalid or expired token." });
     }
-  }
-  return chunks;
-}
-
-async function loadPDF() {
-  try {
-    const pdfPath = "file.pdf";
-    const url = process.env.PDF_URL;
-    if (url && url.startsWith("http")) {
-      await downloadPDF(url, pdfPath);
-    }
-
-    if (!fs.existsSync(pdfPath)) {
-      throw new Error(`PDF file not found at: ${pdfPath}`);
-    }
-
-    console.log("⚡ Reading and parsing PDF...");
-    const data = new Uint8Array(fs.readFileSync(pdfPath));
-    const pdf = await pdfjsLib.getDocument({ data }).promise;
-
-    const pages = [];
-    let currentPart = "";
-    let currentArticle = "";
-
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-      const content = await page.getTextContent();
-      const strings = content.items.map((item) => item.str);
-      const pageText = strings.join(" ").replace(/\s+/g, " ");
-
-      // Detect section metadata
-      const partMatch = pageText.match(/Part\s+([A-Z])\b/i);
-      const articleMatch = pageText.match(/Article\s+\(?(\d+)\)?/i);
-
-      if (partMatch) currentPart = `Part ${partMatch[1].toUpperCase()}`;
-      if (articleMatch) currentArticle = `Article ${articleMatch[1]}`;
-
-      pages.push({ 
-        pageNum: i, 
-        text: pageText,
-        part: currentPart,
-        article: currentArticle
-      });
-    }
-
-    pdfChunks = chunkText(pages, 350, 50);
-    console.log(`✅ PDF loaded. Pages: ${pdf.numPages}, Total chunks: ${pdfChunks.length}`);
-  } catch (e) {
-    console.error("❌ PDF Load Error:", e);
-  }
-}
-
-// Extract search metadata queries (e.g. Article 10, Page 5, Part C)
-function extractQueryMetadata(query) {
-  const meta = { page: null, article: null, part: null };
-  
-  // Normalize Arabic digits to English
-  const normalizeDigits = (str) => {
-    return str.replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
-  };
-  
-  const queryNormalized = normalizeDigits(query.toLowerCase());
-  
-  // Match page number: e.g. "page 12", "صفحة 12", "صفحه 12"
-  const pageMatch = queryNormalized.match(/(?:page|صفحة|صفحه)\s*(\d+)/i);
-  if (pageMatch) {
-    meta.page = parseInt(pageMatch[1], 10);
-  }
-  
-  // Match article number: e.g. "article 10", "مادة 10", "ماده 10", "المادة 10", "الماده 10"
-  const articleMatch = queryNormalized.match(/(?:article|مادة|ماده|المادة|الماده)\s*\(?(\d+)\)?/i);
-  if (articleMatch) {
-    meta.article = `Article ${articleMatch[1]}`;
-  }
-  
-  // Match part: e.g. "part a", "جزء أ", "قسم أ", "القسم أ"
-  const partMatch = queryNormalized.match(/(?:part|جزء|قسم|القسم)\s*([a-d])\b/i);
-  if (partMatch) {
-    meta.part = `Part ${partMatch[1].toUpperCase()}`;
-  }
-  
-  return meta;
-}
-
-const STOP_WORDS = new Set([
-  'a', 'an', 'the', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
-  'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should',
-  'may', 'might', 'shall', 'must', 'can', 'need', 'dare', 'ought', 'used',
-  'to', 'of', 'in', 'for', 'on', 'with', 'at', 'by', 'from', 'as', 'into',
-  'through', 'during', 'before', 'after', 'above', 'below', 'up', 'down', 'out',
-  'off', 'over', 'under', 'again', 'then', 'once', 'and', 'but', 'or', 'nor',
-  'not', 'so', 'yet', 'both', 'either', 'neither', 'whether', 'if', 'that',
-  'this', 'these', 'those', 'what', 'which', 'who', 'how', 'when', 'where',
-  'why', 'all', 'each', 'every', 'more', 'most', 'other', 'some', 'such',
-  'no', 'only', 'same', 'than', 'too', 'very', 'just', 'i', 'you', 'he',
-  'she', 'it', 'we', 'they', 'me', 'him', 'her', 'us', 'them', 'my', 'your',
-  'his', 'its', 'our', 'their', 'any', 'few', 'much', 'many', 'also', 'while'
-]);
-
-function retrieveCandidates(query, chunks, topK = 10) {
-  const queryTokens = query
-    .toLowerCase()
-    .replace(/[^\w\s\u0600-\u06FF]/g, " ")
-    .split(/\s+/)
-    .filter(t => t.length > 1 && !STOP_WORDS.has(t));
-
-  const metaCriteria = extractQueryMetadata(query);
-
-  const scored = chunks.map(chunk => {
-    const chunkLower = chunk.text.toLowerCase();
-    let score = 0;
-    
-    // Keyword scoring
-    for (const token of queryTokens) {
-      const regex = new RegExp(`\\b${token}\\b`, 'g');
-      const matches = chunkLower.match(regex);
-      const tf = matches ? matches.length : 0;
-      if (tf > 0) {
-        score += tf * 3.0;
-      } else if (chunkLower.includes(token)) {
-        score += 1.0;
-      }
-    }
-
-    // Metadata boosting (for simple/targeted queries)
-    if (metaCriteria.page && chunk.page === metaCriteria.page) {
-      score += 25.0;
-    }
-    if (metaCriteria.article && chunk.article && chunk.article.toLowerCase() === metaCriteria.article.toLowerCase()) {
-      score += 25.0;
-    }
-    if (metaCriteria.part && chunk.part && chunk.part.toLowerCase() === metaCriteria.part.toLowerCase()) {
-      score += 15.0;
-    }
-
-    return { chunk, score };
+    req.user = user; // { userId, email, role, facilityId }
+    next();
   });
-
-  scored.sort((a, b) => b.score - a.score);
-  return scored
-    .filter(s => s.score > 0)
-    .map(s => s.chunk)
-    .slice(0, topK);
 }
 
-async function rerankCandidates(query, candidates, topK = 3) {
-  if (!rerankerModel || !rerankerTokenizer) {
-    console.warn("⚠️ Reranker model not loaded. Returning raw candidate retrieval results.");
-    return candidates.slice(0, topK);
-  }
-
-  if (candidates.length === 0) return [];
-
-  try {
-    // Batch tokenize all query-candidate pairs
-    const inputs = await rerankerTokenizer(new Array(candidates.length).fill(query), {
-      text_pair: candidates.map(c => c.text),
-      padding: true,
-      truncation: true,
-      max_length: 512
-    });
-    
-    // Run inference
-    const output = await rerankerModel(inputs);
-    
-    const scoredCandidates = candidates.map((c, idx) => {
-      const score = output.logits.data[idx];
-      return { chunk: c, score };
-    });
-
-    scoredCandidates.sort((a, b) => b.score - a.score);
-    
-    console.log("Reranked results:");
-    scoredCandidates.slice(0, topK).forEach((sc, i) => {
-      console.log(`  [${i+1}] Score: ${sc.score.toFixed(4)} | Page: ${sc.chunk.page} | ${sc.chunk.text.substring(0, 60)}...`);
-    });
-
-    return scoredCandidates.map(s => s.chunk).slice(0, topK);
-  } catch (e) {
-    console.error("❌ Reranking Error:", e.message);
-    return candidates.slice(0, topK);
-  }
-}
-
-// Initialize server data
-async function initServer() {
-  await loadPDF();
-  await initReranker();
-}
-
-initServer();
-
-async function expandQueryWithLLM(query) {
-  const prompt = `You are a search assistant. Your task is to analyze the user's query and expand it to English search keywords and synonyms.
-- If the query is in Arabic (or any other language), translate the core search terms into English.
-- If the query is in English, generate key synonyms, related terms, and alternative spellings.
-- Output ONLY a space-separated list of the 5 to 8 most important English search keywords.
-- Do NOT output any preamble, extra punctuation, numbers, or explanation.
-
-Query: "${query}"`;
-
-  // 1. Try Groq (fast, free)
-  if (groq) {
-    try {
-      console.log("⚡ Requesting query expansion from Groq...");
-      const expansionModel = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
-      const completion = await groq.chat.completions.create({
-        model: expansionModel,
-        messages: [{ role: "user", content: prompt }],
-        max_tokens: 50,
-        temperature: 0.1
+function authorizeRoles(...allowedRoles) {
+  return (req, res, next) => {
+    if (!req.user || !allowedRoles.includes(req.user.role)) {
+      logAuditEvent({ 
+        facilityId: req.user?.facilityId, 
+        userId: req.user?.userId, 
+        userEmail: req.user?.email, 
+        action: "UNAUTHORIZED_ROLE_ACCESS", 
+        details: { attemptedRole: req.user?.role, requiredRoles: allowedRoles }, 
+        req 
       });
-      const res = completion.choices[0].message?.content?.trim();
-      if (res) {
-        console.log(`🔍 LLM Expanded query keywords: "${res}"`);
-        return res;
-      }
-    } catch (e) {
-      console.warn("⚠️ Groq query expansion failed:", e.message);
+      return res.status(403).json({ success: false, message: "Forbidden. Insufficient permissions." });
     }
-  }
-
-  // 2. Try Gemini
-  if (genAI) {
-    try {
-      console.log("⚡ Requesting query expansion from Gemini...");
-      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-      const resultObj = await model.generateContent(prompt);
-      const res = resultObj.response.text()?.trim();
-      if (res) {
-        console.log(`🔍 Gemini Expanded query keywords: "${res}"`);
-        return res;
-      }
-    } catch (e) {
-      console.warn("⚠️ Gemini query expansion failed:", e.message);
-    }
-  }
-
-  return "";
+    next();
+  };
 }
 
-app.post("/ask", async (req, res) => {
-  const question = req.body.message;
-  if (!question) {
-    return res.status(400).json({ reply: "Message is required" });
+function enforceTenantIsolation(req, res, next) {
+  if (req.user.role === "SUPER_ADMIN") {
+    return next();
   }
 
-  const ollamaHost = (process.env.OLLAMA_HOST || "http://localhost:11434").replace(/\/$/, "");
-  const ollamaModel = process.env.OLLAMA_MODEL || "llama3.2";
-
-  try {
-    // ─── Step 1: LLM Query Expansion ───
-    const expandedKeywords = await expandQueryWithLLM(question);
-    
-    // Combine original question and expanded keywords
-    const searchQuery = `${question} ${expandedKeywords}`;
-    console.log(`🔎 Combined search query: "${searchQuery}"`);
-
-    const candidates = retrieveCandidates(searchQuery, pdfChunks, 10);
-    const topChunks = await rerankCandidates(question, candidates, 3);
-    
-    if (topChunks.length === 0) {
-      return res.json({
-        reply: "Not found in document",
-        sources: []
-      });
-    }
-
-    const context = topChunks.map(c => c.text).join("\n\n");
-    const sourcePages = [...new Set(topChunks.map(c => c.page))].sort((a, b) => a - b);
-
-    let reply = "";
-    const errors = [];
-
-    const SYSTEM_PROMPT = `You are a helpful academic assistant that answers questions based on the provided document context.
-- Use the provided context to answer the question as accurately and completely as possible.
-- If the context contains relevant information, synthesize a clear answer even if it is not stated verbatim.
-- Only respond with exactly 'Not found in document' if the context contains absolutely no relevant information.
-- Answer in the same language as the user's question (Arabic question → Arabic answer, English question → English answer).
-- Be concise and direct.`;
-
-    // ── 1. Try Groq (FREE & Fast - Primary Provider) ───────────────────────
-    if (groq) {
-      try {
-        const groqModel = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
-        console.log(`⚡ Trying Groq (${groqModel})...`);
-        const completion = await groq.chat.completions.create({
-          model: groqModel,
-          messages: [
-            { role: "system", content: SYSTEM_PROMPT },
-            { role: "user", content: `Context:\n${context}\n\nQuestion: ${question}` }
-          ]
-        });
-        reply = completion.choices[0].message.content || "";
-      } catch (e) {
-        console.warn("⚠️ Groq failed:", e.message);
-        errors.push("Groq: " + e.message);
-      }
-    }
-
-    // ── 2. Try OpenAI (ChatGPT) ────────────────────────────────────────────
-    if (!reply && openai) {
-      try {
-        const openaiModel = process.env.OPENAI_MODEL || "gpt-4o-mini";
-        console.log(`⚡ Trying OpenAI (${openaiModel})...`);
-        const completion = await openai.chat.completions.create({
-          model: openaiModel,
-          messages: [
-            { role: "system", content: SYSTEM_PROMPT },
-            { role: "user", content: `Context:\n${context}\n\nQuestion: ${question}` }
-          ]
-        });
-        reply = completion.choices[0].message.content || "";
-      } catch (e) {
-        console.warn("⚠️ OpenAI failed:", e.message);
-        errors.push("OpenAI: " + e.message);
-      }
-    }
-
-    // ── 3. Try Google Gemini ───────────────────────────────────────────────
-    if (!reply && genAI) {
-      try {
-        const modelName = process.env.GEMINI_MODEL || "gemini-2.5-flash";
-        console.log(`⚡ Trying Google Gemini (${modelName})...`);
-        const model = genAI.getGenerativeModel({ model: modelName });
-        const geminiPrompt = `${SYSTEM_PROMPT}\n\nContext:\n${context}\n\nQuestion: ${question}`;
-        const result = await model.generateContent(geminiPrompt);
-        reply = result.response.text() || "";
-      } catch (e) {
-        console.warn("⚠️ Gemini failed:", e.message);
-        errors.push("Gemini: " + e.message);
-      }
-    }
-
-    // ── 4. Try Ollama (Local - Last Resort) ────────────────────────────────
-    if (!reply) {
-      try {
-        console.log(`⚡ Trying Ollama (${ollamaModel})...`);
-        const response = await fetch(`${ollamaHost}/api/chat`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            model: ollamaModel,
-            messages: [
-              { role: "system", content: SYSTEM_PROMPT },
-              { role: "user", content: `Context:\n${context}\n\nQuestion: ${question}` }
-            ],
-            stream: false
-          })
-        });
-        if (!response.ok) throw new Error(`Ollama error: ${response.status}`);
-        const data = await response.json();
-        reply = data.message?.content || "";
-      } catch (e) {
-        console.warn("⚠️ Ollama failed:", e.message);
-        errors.push("Ollama: " + e.message);
-      }
-    }
-
-    // ── All LLMs failed ────────────────────────────────────────────────────
-    if (!reply) {
-      return res.json({
-        reply: `❌ All AI providers failed. Please check your configuration.\n\nDetails:\n${errors.map(e => "• " + e).join("\n")}`,
-        sources: []
-      });
-    }
-
-    // ── Append source pages ────────────────────────────────────────────────
-    // Trim trailing punctuation before comparing so "Not found in document." also matches
-    const replyNormalized = reply.trim().toLowerCase().replace(/[.!?]+$/, "");
-    if (replyNormalized !== "not found in document" && sourcePages.length > 0) {
-      const sourceStr = sourcePages.map(p => `Page ${p}`).join(", ");
-      reply += `\n\nSources: ${sourceStr}`;
-    }
-
-    res.json({ reply, sources: sourcePages });
-
-  } catch (e) {
-    console.error("❌ Unexpected server error:", e);
-    res.json({ reply: `❌ Server error: ${e.message}`, sources: [] });
+  const clientHeaderFacilityId = req.headers["x-facility-id"];
+  if (clientHeaderFacilityId && clientHeaderFacilityId !== req.user.facilityId) {
+    logAuditEvent({ 
+      facilityId: req.user.facilityId, 
+      userId: req.user.userId, 
+      userEmail: req.user.email, 
+      action: "SUSPICIOUS_CROSS_TENANT_ATTEMPT", 
+      details: { clientHeaderFacilityId, jwtFacilityId: req.user.facilityId }, 
+      req 
+    });
+    return res.status(403).json({ success: false, message: "Security Violation: Access denied to facility data." });
   }
-});
 
-// ─── Platform REST API Endpoints ──────────────────────────────────────────────
-app.post("/api/auth/login", (req, res) => {
+  req.tenantFacilityId = req.user.facilityId;
+  next();
+}
+
+// =============================================================================
+// Auth & Account Endpoints
+// =============================================================================
+
+// 1. Super Admin Authentication
+app.post("/api/auth/super-admin/login", async (req, res) => {
   const { email, password } = req.body;
-  if (email === "admin@gahar.eg" || email === "admin") {
+  console.log(`🔑 Super Admin Login Attempt: ${email}`);
+
+  if (email === SUPER_ADMIN_EMAIL && password === (process.env.SUPER_ADMIN_PASSWORD || "SuperAdmin@2026!")) {
+    const token = jwt.sign(
+      { 
+        userId: "00000000-0000-0000-0000-000000000001", 
+        email, 
+        role: "SUPER_ADMIN", 
+        facilityId: null 
+      },
+      JWT_SECRET,
+      { expiresIn: "24h" }
+    );
+
+    logAuditEvent({ userEmail: email, action: "SUPER_ADMIN_LOGIN", req });
+
     return res.json({
       success: true,
-      token: "super_admin_token_secure",
+      token,
       user: {
-        id: "admin_001",
-        email: "admin@gahar.eg",
+        id: "00000000-0000-0000-0000-000000000001",
+        email,
         fullName: "Platform Super Admin",
-        role: "superAdmin",
-        facilityId: "platform_root",
-      },
+        role: "SUPER_ADMIN",
+        facilityId: null,
+      }
     });
   }
+
+  logAuditEvent({ userEmail: email, action: "SUPER_ADMIN_LOGIN_FAILED", req });
+  return res.status(401).json({ success: false, message: "Invalid Super Admin credentials." });
+});
+
+// 2. Facility User Login
+app.post("/api/auth/login", async (req, res) => {
+  const { email, password } = req.body;
+  console.log(`🔐 Facility Login Attempt: ${email}`);
+
+  let user = memoryDb.users.find(u => u.email.toLowerCase() === email.toLowerCase());
+
+  if (!user && email === SUPER_ADMIN_EMAIL) {
+    return res.status(400).json({ success: false, message: "Please use Super Admin Portal login." });
+  }
+
+  if (!user) {
+    user = {
+      id: uuidv4(),
+      email,
+      password_hash: bcrypt.hashSync(password, 10),
+      full_name: email.split("@")[0],
+      role: "FACILITY_ADMIN",
+      facility_id: "fac_01000000-0000-0000-0000-000000000001",
+      is_active: true
+    };
+    memoryDb.users.push(user);
+  }
+
+  let facility = memoryDb.facilities.find(f => f.id === user.facility_id);
+  if (!facility) {
+    facility = memoryDb.facilities[0];
+  }
+
+  const token = jwt.sign(
+    { 
+      userId: user.id, 
+      email: user.email, 
+      role: user.role, 
+      facilityId: user.facility_id 
+    },
+    JWT_SECRET,
+    { expiresIn: "24h" }
+  );
+
+  logAuditEvent({ facilityId: user.facility_id, userId: user.id, userEmail: user.email, action: "USER_LOGIN_SUCCESS", req });
 
   res.json({
     success: true,
-    token: `token_${Date.now()}`,
+    token,
     user: {
-      id: `usr_${Date.now()}`,
-      email: email || "user@hospital.eg",
-      fullName: "Hospital Quality Director",
-      role: "qualityManager",
-      facilityId: "fac_default",
+      id: user.id,
+      email: user.email,
+      fullName: user.full_name,
+      role: user.role,
+      facilityId: user.facility_id,
     },
+    facility: {
+      id: facility.id,
+      name: facility.name,
+      status: facility.status,
+      subscriptionPlan: facility.subscription_plan_id,
+    }
   });
 });
 
-app.post("/api/auth/register-facility", (req, res) => {
-  const data = req.body;
-  console.log("🏢 New Facility Registration Request Received:", data.facilityName);
+// 3. Facility Registration
+app.post("/api/auth/register-facility", async (req, res) => {
+  const {
+    facilityName,
+    facilityType,
+    governorate,
+    bedCapacity,
+    address,
+    contactPerson,
+    workEmail,
+    phone,
+    password,
+    subscriptionPlanId,
+    paymentMethod,
+    paymentReference
+  } = req.body;
+
+  console.log(`🏥 New Facility Onboarding Request: ${facilityName} (${workEmail})`);
+
+  const facilityId = `fac_${uuidv4()}`;
+  const userId = `usr_${uuidv4()}`;
+
+  const initialStatus = paymentMethod === "Online Gateway" ? "ACTIVE" : "PENDING_REVIEW";
+
+  const newFacility = {
+    id: facilityId,
+    name: facilityName,
+    type: facilityType || "Hospital",
+    governorate: governorate || "Cairo",
+    address: address || "",
+    bed_capacity: parseInt(bedCapacity || "100", 10),
+    contact_person: contactPerson,
+    work_email: workEmail,
+    phone: phone,
+    gahar_version: "GAHAR 2025 v2",
+    status: initialStatus,
+    subscription_plan_id: subscriptionPlanId || "plan_standard",
+    created_at: new Date().toISOString()
+  };
+
+  const newUser = {
+    id: userId,
+    email: workEmail,
+    password_hash: bcrypt.hashSync(password || "Hospital@2026", 10),
+    full_name: contactPerson,
+    role: "FACILITY_ADMIN",
+    facility_id: facilityId,
+    is_active: true,
+    created_at: new Date().toISOString()
+  };
+
+  memoryDb.facilities.unshift(newFacility);
+  memoryDb.users.unshift(newUser);
+
+  if (paymentReference) {
+    memoryDb.payments.unshift({
+      id: `pay_${uuidv4()}`,
+      facility_id: facilityId,
+      plan_id: subscriptionPlanId,
+      amount: subscriptionPlanId === "plan_enterprise" ? 120000 : 45000,
+      payment_method: paymentMethod,
+      status: "PENDING_VERIFICATION",
+      transaction_ref: paymentReference,
+      created_at: new Date().toISOString()
+    });
+  }
+
+  // Fire email notification to Super Admin
+  await sendFacilityRegistrationNotification({
+    name: facilityName,
+    type: facilityType,
+    governorate,
+    bedCapacity,
+    contactPerson,
+    workEmail,
+    phone,
+    subscriptionPlanId,
+    paymentMethod,
+    status: initialStatus
+  });
+
+  logAuditEvent({ facilityId, userId, userEmail: workEmail, action: "FACILITY_REGISTRATION_SUBMITTED", details: { status: initialStatus }, req });
+
+  const token = jwt.sign(
+    { userId, email: workEmail, role: "FACILITY_ADMIN", facilityId },
+    JWT_SECRET,
+    { expiresIn: "24h" }
+  );
 
   res.status(201).json({
     success: true,
-    message: "Registration submitted successfully. Pending Super Admin verification.",
-    facilityId: `fac_${Date.now()}`,
+    message: "Facility registration submitted successfully.",
+    token,
+    facility: newFacility,
+    user: {
+      id: userId,
+      email: workEmail,
+      fullName: contactPerson,
+      role: "FACILITY_ADMIN",
+      facilityId
+    }
   });
 });
 
-app.post("/api/ai/copilot", async (req, res) => {
+// =============================================================================
+// Super Admin Management Endpoints
+// =============================================================================
+
+app.get("/api/admin/facilities", authenticateToken, authorizeRoles("SUPER_ADMIN"), async (req, res) => {
+  res.json({ success: true, facilities: memoryDb.facilities });
+});
+
+app.put("/api/admin/facilities/:id/status", authenticateToken, authorizeRoles("SUPER_ADMIN"), async (req, res) => {
+  const { id } = req.params;
+  const { status, reason } = req.body;
+
+  const facility = memoryDb.facilities.find(f => f.id === id);
+  if (!facility) {
+    return res.status(404).json({ success: false, message: "Facility not found." });
+  }
+
+  facility.status = status;
+  logAuditEvent({ facilityId: id, userId: req.user.userId, userEmail: req.user.email, action: `FACILITY_STATUS_UPDATED_${status}`, details: { status, reason }, req });
+
+  // Send status update notification email
+  await sendFacilityStatusNotification(facility.work_email, facility.name, status, reason);
+
+  res.json({ success: true, message: `Facility status updated to ${status}.`, facility });
+});
+
+app.get("/api/admin/plans", authenticateToken, async (req, res) => {
+  res.json({ success: true, plans: memoryDb.subscription_plans });
+});
+
+app.get("/api/admin/analytics", authenticateToken, authorizeRoles("SUPER_ADMIN"), async (req, res) => {
+  const totalFacilities = memoryDb.facilities.length;
+  const activeSubscriptions = memoryDb.facilities.filter(f => f.status === "ACTIVE" || f.status === "APPROVED").length;
+  const pendingRegistrations = memoryDb.facilities.filter(f => f.status === "PENDING_REVIEW" || f.status === "PENDING_PAYMENT").length;
+  const monthlyArrEgp = activeSubscriptions * 15000;
+
+  res.json({
+    success: true,
+    analytics: {
+      totalFacilities,
+      activeSubscriptions,
+      pendingRegistrations,
+      monthlyArrEgp
+    }
+  });
+});
+
+app.get("/api/admin/audit-logs", authenticateToken, authorizeRoles("SUPER_ADMIN"), async (req, res) => {
+  res.json({ success: true, auditLogs: memoryDb.audit_logs });
+});
+
+// =============================================================================
+// Payment Endpoints
+// =============================================================================
+
+app.post("/api/payments/submit-proof", authenticateToken, enforceTenantIsolation, async (req, res) => {
+  const { planId, amount, paymentMethod, transactionRef, proofUrl } = req.body;
+
+  const payment = {
+    id: `pay_${uuidv4()}`,
+    facility_id: req.tenantFacilityId,
+    plan_id: planId,
+    amount: amount || 45000,
+    payment_method: paymentMethod,
+    status: "PENDING_VERIFICATION",
+    transaction_ref: transactionRef,
+    proof_url: proofUrl,
+    created_at: new Date().toISOString()
+  };
+
+  memoryDb.payments.unshift(payment);
+
+  const facility = memoryDb.facilities.find(f => f.id === req.tenantFacilityId);
+  if (facility) {
+    facility.status = "PENDING_REVIEW";
+    await sendPaymentVerificationNotification(payment, facility.name);
+  }
+
+  logAuditEvent({ facilityId: req.tenantFacilityId, userId: req.user.userId, userEmail: req.user.email, action: "PAYMENT_PROOF_SUBMITTED", details: { transactionRef, amount }, req });
+
+  res.json({ success: true, message: "Payment reference submitted for Super Admin verification.", payment });
+});
+
+app.post("/api/payments/verify", authenticateToken, authorizeRoles("SUPER_ADMIN"), async (req, res) => {
+  const { paymentId, approved } = req.body;
+  const payment = memoryDb.payments.find(p => p.id === paymentId);
+
+  if (!payment) {
+    return res.status(404).json({ success: false, message: "Payment record not found." });
+  }
+
+  payment.status = approved ? "VERIFIED" : "REJECTED";
+  
+  const facility = memoryDb.facilities.find(f => f.id === payment.facility_id);
+  if (facility && approved) {
+    facility.status = "APPROVED";
+    await sendFacilityStatusNotification(facility.work_email, facility.name, "APPROVED");
+  }
+
+  logAuditEvent({ facilityId: payment.facility_id, userId: req.user.userId, userEmail: req.user.email, action: `PAYMENT_VERIFICATION_${payment.status}`, req });
+
+  res.json({ success: true, payment });
+});
+
+// =============================================================================
+// Multi-Tenant Accreditation Endpoints (JWT Derived Tenant)
+// =============================================================================
+
+app.get("/api/gaps", authenticateToken, enforceTenantIsolation, (req, res) => {
+  const facilityGaps = memoryDb.gaps.filter(g => g.facilityId === req.tenantFacilityId);
+  res.json({ success: true, gaps: facilityGaps });
+});
+
+app.post("/api/gaps", authenticateToken, enforceTenantIsolation, (req, res) => {
+  const newGap = { id: `gap_${uuidv4()}`, facilityId: req.tenantFacilityId, ...req.body, createdAt: new Date().toISOString() };
+  memoryDb.gaps.unshift(newGap);
+  res.status(201).json({ success: true, gap: newGap });
+});
+
+app.get("/api/action-plans", authenticateToken, enforceTenantIsolation, (req, res) => {
+  const facilityPlans = memoryDb.action_plans.filter(p => p.facilityId === req.tenantFacilityId);
+  res.json({ success: true, actionPlans: facilityPlans });
+});
+
+app.post("/api/action-plans", authenticateToken, enforceTenantIsolation, (req, res) => {
+  const newPlan = { id: `plan_${uuidv4()}`, facilityId: req.tenantFacilityId, ...req.body, createdAt: new Date().toISOString() };
+  memoryDb.action_plans.unshift(newPlan);
+  res.status(201).json({ success: true, actionPlan: newPlan });
+});
+
+app.get("/api/licenses", authenticateToken, enforceTenantIsolation, (req, res) => {
+  const facilityLicenses = memoryDb.licenses.filter(l => l.facilityId === req.tenantFacilityId);
+  res.json({ success: true, licenses: facilityLicenses });
+});
+
+app.post("/api/licenses", authenticateToken, enforceTenantIsolation, (req, res) => {
+  const newLicense = { id: `lic_${uuidv4()}`, facilityId: req.tenantFacilityId, ...req.body, createdAt: new Date().toISOString() };
+  memoryDb.licenses.unshift(newLicense);
+  res.status(201).json({ success: true, license: newLicense });
+});
+
+app.get("/api/documents", authenticateToken, enforceTenantIsolation, (req, res) => {
+  const facilityDocs = memoryDb.documents.filter(d => d.facilityId === req.tenantFacilityId);
+  res.json({ success: true, documents: facilityDocs });
+});
+
+app.post("/api/documents", authenticateToken, enforceTenantIsolation, (req, res) => {
+  const newDoc = { id: `doc_${uuidv4()}`, facilityId: req.tenantFacilityId, ...req.body, createdAt: new Date().toISOString() };
+  memoryDb.documents.unshift(newDoc);
+  res.status(201).json({ success: true, document: newDoc });
+});
+
+// =============================================================================
+// AI Copilot Endpoint (Proxy Server - Zero Client Keys Exposed)
+// =============================================================================
+
+app.post("/api/ai/copilot", authenticateToken, async (req, res) => {
   const { prompt, screenContext, entityData } = req.body;
-  console.log(`🤖 AI Copilot Context Query [${screenContext}]: "${prompt}"`);
+  console.log(`🤖 AI Copilot Query [${screenContext}] User: ${req.user.email}`);
 
   let reply = "";
-  const systemPrompt = `You are the GAHAR AI Copilot for Healthcare Accreditation in Egypt.
+  const systemPrompt = `You are the official GAHAR AI Copilot for Healthcare Accreditation in Egypt.
 Current Screen/Context: "${screenContext}".
 Entity Data: ${JSON.stringify(entityData || {})}.
-Provide expert, structured, clear guidance for the healthcare quality team in Arabic or English based on the user prompt.`;
+Provide professional, accurate, structured GAHAR 2025 guidance in Arabic or English. Do not invent non-existent standard codes.`;
 
   if (groq) {
     try {
@@ -525,44 +480,17 @@ Provide expert, structured, clear guidance for the healthcare quality team in Ar
   }
 
   if (!reply) {
-    reply = `[GAHAR Copilot - ${screenContext}]: To achieve full compliance for ${screenContext}, ensure all GAHAR 2025 evidence of compliance (EOC) items are documented, reviewed by your quality committee, and verified prior to survey audit.`;
+    reply = `[GAHAR Copilot - ${screenContext}]: For full GAHAR 2025 compliance in ${screenContext}, ensure all Evidence of Compliance (EOC) items are documented, approved by your Quality Committee, and verified before the official survey.`;
   }
 
-  res.json({ reply });
+  res.json({ success: true, reply });
 });
 
-app.get("/api/admin/facilities", (req, res) => {
-  res.json({
-    facilities: [
-      {
-        id: "fac_01",
-        name: "Cairo International Medical Center",
-        type: "Hospital (300 Beds)",
-        governorate: "Cairo",
-        plan: "Enterprise Multi-Branch",
-        status: "Active",
-      },
-      {
-        id: "fac_02",
-        name: "Alexandria Specialized Children Hospital",
-        type: "Specialized Hospital (120 Beds)",
-        governorate: "Alexandria",
-        plan: "Standard Hospital",
-        status: "Pending Approval",
-      },
-    ],
-  });
-});
+// =============================================================================
+// Start Backend Server
+// =============================================================================
 
-app.get("/api/admin/analytics", (req, res) => {
-  res.json({
-    totalFacilities: 42,
-    activeSubscriptions: 38,
-    pendingRegistrations: 4,
-    monthlyArrEgp: 185000,
-  });
-});
-
-app.listen(3000, () => {
-  console.log("🚀 Server running on http://localhost:3000");
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`🚀 AccrediGo Production Backend Server running on port ${PORT}`);
 });

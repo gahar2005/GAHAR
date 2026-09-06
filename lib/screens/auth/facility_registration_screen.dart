@@ -11,100 +11,117 @@ class FacilityRegistrationScreen extends StatefulWidget {
   const FacilityRegistrationScreen({super.key, required this.onSuccess});
 
   @override
-  State<FacilityRegistrationScreen> createState() =>
-      _FacilityRegistrationScreenState();
+  State<FacilityRegistrationScreen> createState() => _FacilityRegistrationScreenState();
 }
 
-class _FacilityRegistrationScreenState
-    extends State<FacilityRegistrationScreen> {
+class _FacilityRegistrationScreenState extends State<FacilityRegistrationScreen> {
   int _currentStep = 0;
   final _nameController = TextEditingController();
   final _governorateController = TextEditingController(text: 'Cairo');
   final _bedsController = TextEditingController(text: '120');
   final _adminNameController = TextEditingController();
   final _emailController = TextEditingController();
+  final _phoneController = TextEditingController(text: '+201001234567');
   final _passwordController = TextEditingController();
+  final _paymentRefController = TextEditingController();
 
-  String _facilityType = 'Hospital / مستشفى عام';
-  String _selectedPlan = 'Standard Hospital Subscription';
-  String _selectedPaymentMethod = 'Bank Transfer / تحويل بنكي';
+  String _facilityType = 'Hospital';
+  String _selectedPlan = 'plan_standard';
+  String _selectedPaymentMethod = 'Vodafone Cash';
   bool _loading = false;
+  String? _errorMessage;
 
-  final List<String> _facilityTypes = [
-    'Hospital / مستشفى عام',
-    'Specialized Hospital / مستشفى تخصصي',
-    'Primary Healthcare Unit / وحدة رعاية أولية',
-    'Diagnostic Radiology Center / مركز أشعة',
-    'Medical Laboratory / معمل تحاليل',
+  final List<Map<String, String>> _facilityTypes = [
+    {'value': 'Hospital', 'label': 'Hospital / مستشفى عام'},
+    {'value': 'Specialized Hospital', 'label': 'Specialized Hospital / مستشفى تخصصي'},
+    {'value': 'Primary Healthcare Unit', 'label': 'Primary Care Unit / وحدة رعاية أولية'},
+    {'value': 'Radiology Center', 'label': 'Radiology Center / مركز أشعة'},
+    {'value': 'Medical Laboratory', 'label': 'Medical Laboratory / معمل تحاليل'},
   ];
 
-  final List<String> _plans = [
-    'Trial Plan (14 Days Free)',
-    'Standard Hospital Subscription',
-    'Enterprise Multi-Branch Subscription',
+  final List<Map<String, String>> _plans = [
+    {'value': 'plan_standard', 'label': 'Standard Hospital (EGP 45,000 / year)'},
+    {'value': 'plan_enterprise', 'label': 'Enterprise Multi-Branch (EGP 120,000 / year)'},
+    {'value': 'plan_lab', 'label': 'Specialized Center / Lab (EGP 25,000 / year)'},
   ];
 
   final List<String> _paymentMethods = [
-    'Bank Transfer / تحويل بنكي',
-    'Vodafone Cash Receipt / محفظة فودافون كاش',
-    'Credit Card (Online Gateway)',
+    'Vodafone Cash',
+    'Bank Transfer',
+    'Online Gateway',
   ];
 
   Future<void> _submitRegistration() async {
-    setState(() => _loading = true);
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+    final name = _nameController.text.trim();
+
+    if (name.isEmpty || email.isEmpty || password.isEmpty) {
+      setState(() => _errorMessage = 'Please complete all required fields.');
+      return;
+    }
+
+    setState(() {
+      _loading = true;
+      _errorMessage = null;
+    });
 
     final payload = {
-      'facilityName': _nameController.text.trim(),
+      'facilityName': name,
       'facilityType': _facilityType,
       'governorate': _governorateController.text.trim(),
-      'bedCapacity': int.tryParse(_bedsController.text) ?? 100,
-      'adminName': _adminNameController.text.trim(),
-      'email': _emailController.text.trim(),
-      'plan': _selectedPlan,
+      'bedCapacity': _bedsController.text.trim(),
+      'contactPerson': _adminNameController.text.trim(),
+      'workEmail': email,
+      'phone': _phoneController.text.trim(),
+      'password': password,
+      'subscriptionPlanId': _selectedPlan,
       'paymentMethod': _selectedPaymentMethod,
+      'paymentReference': _paymentRefController.text.trim(),
     };
 
-    await ApiService.registerFacility(payload);
+    final response = await ApiService.registerFacility(payload);
 
-    // Save locally
-    final profile = HospitalProfile(
-      name: _nameController.text.trim().isEmpty
-          ? 'New Hospital'
-          : _nameController.text.trim(),
-      type: _facilityType,
-      capacity: '${_bedsController.text} beds',
-      departments: const ['Emergency', 'ICU', 'Surgery', 'Infection Control'],
-      owner: _adminNameController.text.trim().isEmpty
-          ? 'Healthcare Admin'
-          : _adminNameController.text.trim(),
-    );
+    if (response['success'] == true) {
+      final fac = response['facility'] ?? {};
+      final usr = response['user'] ?? {};
 
-    await StorageService.saveHospitalProfile(profile);
+      final userProfile = UserProfile(
+        id: usr['id'] ?? 'usr_1',
+        email: email,
+        fullName: _adminNameController.text.trim().isEmpty ? 'Administrator' : _adminNameController.text.trim(),
+        role: UserRole.facilityAdmin,
+        facilityId: fac['id'] ?? 'fac_1',
+        createdAt: DateTime.now(),
+      );
 
-    final user = UserProfile(
-      id: 'usr_${DateTime.now().millisecondsSinceEpoch}',
-      email: _emailController.text.trim(),
-      fullName: _adminNameController.text.trim().isEmpty
-          ? 'Quality Manager'
-          : _adminNameController.text.trim(),
-      role: UserRole.facilityAdmin,
-      facilityId: 'fac_${DateTime.now().millisecondsSinceEpoch}',
-      createdAt: DateTime.now(),
-    );
+      final hospitalProfile = HospitalProfile(
+        name: name,
+        type: _facilityType,
+        capacity: '${_bedsController.text} beds',
+        departments: const ['Emergency', 'ICU', 'Surgery', 'Quality Committee'],
+        owner: _adminNameController.text.trim(),
+      );
 
-    await StorageService.saveUserProfile(user);
-    await StorageService.saveAuthToken('fac_auth_token');
+      await StorageService.saveAuthToken(response['token'] ?? '');
+      await StorageService.saveUserProfile(userProfile);
+      await StorageService.saveHospitalProfile(hospitalProfile);
 
-    setState(() => _loading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Registration Request Submitted to Super Admin!'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+        widget.onSuccess();
+      }
+    } else {
+      setState(() => _errorMessage = response['message'] ?? 'Registration failed.');
+    }
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Registration Request Submitted Successfully!'),
-          backgroundColor: AppColors.success,
-        ),
-      );
-      widget.onSuccess();
+      setState(() => _loading = false);
     }
   }
 
@@ -113,6 +130,8 @@ class _FacilityRegistrationScreenState
     return Scaffold(
       appBar: AppBar(
         title: const Text('Register Healthcare Facility'),
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
       ),
       body: Stepper(
         currentStep: _currentStep,
@@ -135,6 +154,10 @@ class _FacilityRegistrationScreenState
               children: [
                 ElevatedButton(
                   onPressed: _loading ? null : details.onStepContinue,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                  ),
                   child: _loading
                       ? const SizedBox(
                           width: 16,
@@ -158,13 +181,20 @@ class _FacilityRegistrationScreenState
           );
         },
         steps: [
-          // Step 1: Facility Info
+          // Step 1: Facility Profile
           Step(
             title: const Text('Facility Profile'),
-            subtitle: const Text('Name, Type, Beds & Location'),
+            subtitle: const Text('Name, Type & Capacity'),
             isActive: _currentStep >= 0,
             content: Column(
               children: [
+                if (_errorMessage != null)
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    margin: const EdgeInsets.only(bottom: 12),
+                    color: AppColors.error.withOpacity(0.1),
+                    child: Text(_errorMessage!, style: const TextStyle(color: AppColors.error, fontSize: 12)),
+                  ),
                 TextField(
                   controller: _nameController,
                   decoration: const InputDecoration(
@@ -180,7 +210,7 @@ class _FacilityRegistrationScreenState
                     prefixIcon: Icon(Icons.category_outlined),
                   ),
                   items: _facilityTypes.map((t) {
-                    return DropdownMenuItem(value: t, child: Text(t));
+                    return DropdownMenuItem(value: t['value'], child: Text(t['label']!));
                   }).toList(),
                   onChanged: (v) => setState(() => _facilityType = v!),
                 ),
@@ -202,7 +232,7 @@ class _FacilityRegistrationScreenState
                         controller: _bedsController,
                         keyboardType: TextInputType.number,
                         decoration: const InputDecoration(
-                          labelText: 'Bed Capacity / سعة الأسرة',
+                          labelText: 'Bed Capacity / الأسرة',
                           prefixIcon: Icon(Icons.bed_outlined),
                         ),
                       ),
@@ -213,17 +243,17 @@ class _FacilityRegistrationScreenState
             ),
           ),
 
-          // Step 2: Administrator Info
+          // Step 2: Administrator Credentials
           Step(
             title: const Text('Administrator Account'),
-            subtitle: const Text('Contact person & authentication'),
+            subtitle: const Text('Contact Person & Auth'),
             isActive: _currentStep >= 1,
             content: Column(
               children: [
                 TextField(
                   controller: _adminNameController,
                   decoration: const InputDecoration(
-                    labelText: 'Full Name / اسم المسؤول',
+                    labelText: 'Administrator Name / اسم المسؤول',
                     prefixIcon: Icon(Icons.person_outline),
                   ),
                 ),
@@ -232,8 +262,17 @@ class _FacilityRegistrationScreenState
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
                   decoration: const InputDecoration(
-                    labelText: 'Official Work Email / البريد الإلكتروني',
+                    labelText: 'Work Email / البريد الرسمي',
                     prefixIcon: Icon(Icons.email_outlined),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: _phoneController,
+                  keyboardType: TextInputType.phone,
+                  decoration: const InputDecoration(
+                    labelText: 'Phone Number / رقم الهاتف',
+                    prefixIcon: Icon(Icons.phone_outlined),
                   ),
                 ),
                 const SizedBox(height: 14),
@@ -249,10 +288,10 @@ class _FacilityRegistrationScreenState
             ),
           ),
 
-          // Step 3: Subscription & Payment
+          // Step 3: Subscription & Payment Verification
           Step(
             title: const Text('Subscription & Payment'),
-            subtitle: const Text('Select Plan & Payment Workflow'),
+            subtitle: const Text('Plan Selection & Payment Proof'),
             isActive: _currentStep >= 2,
             content: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -264,7 +303,7 @@ class _FacilityRegistrationScreenState
                     prefixIcon: Icon(Icons.card_membership_outlined),
                   ),
                   items: _plans.map((p) {
-                    return DropdownMenuItem(value: p, child: Text(p));
+                    return DropdownMenuItem(value: p['value'], child: Text(p['label']!));
                   }).toList(),
                   onChanged: (v) => setState(() => _selectedPlan = v!),
                 ),
@@ -280,6 +319,14 @@ class _FacilityRegistrationScreenState
                   }).toList(),
                   onChanged: (v) => setState(() => _selectedPaymentMethod = v!),
                 ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: _paymentRefController,
+                  decoration: const InputDecoration(
+                    labelText: 'Transaction Reference / رقم عملية الدفع (Optional)',
+                    prefixIcon: Icon(Icons.receipt_long_outlined),
+                  ),
+                ),
                 const SizedBox(height: 16),
                 Container(
                   padding: const EdgeInsets.all(12),
@@ -290,11 +337,11 @@ class _FacilityRegistrationScreenState
                   ),
                   child: const Row(
                     children: [
-                      Icon(Icons.info_outline, color: AppColors.info),
+                      Icon(Icons.shield_outlined, color: AppColors.info),
                       SizedBox(width: 10),
                       Expanded(
                         child: Text(
-                          'Note: Subscriptions require verification by Platform Super Admin before full activation.',
+                          'Your registration request will be submitted to Super Admin for verification. Account will be activated upon review.',
                           style: TextStyle(fontSize: 12, color: AppColors.info),
                         ),
                       ),

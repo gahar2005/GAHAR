@@ -18,6 +18,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _loading = false;
+  bool _isSuperAdminMode = false;
   String? _errorMessage;
 
   Future<void> _handleLogin() async {
@@ -34,57 +35,42 @@ class _LoginScreenState extends State<LoginScreen> {
       _errorMessage = null;
     });
 
-    final response = await ApiService.login(email, password);
+    Map<String, dynamic> response;
+    if (_isSuperAdminMode || email.toLowerCase() == 'admin@accredigo.eg') {
+      response = await ApiService.superAdminLogin(email, password);
+    } else {
+      response = await ApiService.login(email, password);
+    }
 
     if (response['success'] == true) {
+      final userData = response['user'] ?? {};
+      final roleStr = userData['role'] ?? (_isSuperAdminMode ? 'SUPER_ADMIN' : 'FACILITY_ADMIN');
+      
       final user = UserProfile(
-        id: response['user']['id'] ?? 'user_1',
+        id: userData['id'] ?? 'user_1',
         email: email,
-        fullName: response['user']['fullName'] ?? 'Quality Manager',
+        fullName: userData['fullName'] ?? (_isSuperAdminMode ? 'Platform Super Admin' : 'Facility Administrator'),
         role: UserRole.values.firstWhere(
-          (r) => r.name == response['user']['role'],
-          orElse: () => UserRole.qualityManager,
+          (r) => r.name == roleStr,
+          orElse: () => _isSuperAdminMode ? UserRole.superAdmin : UserRole.facilityAdmin,
         ),
-        facilityId: response['user']['facilityId'] ?? 'fac_default',
+        facilityId: userData['facilityId'] ?? 'fac_01000000-0000-0000-0000-000000000001',
         createdAt: DateTime.now(),
       );
 
-      await StorageService.saveAuthToken(response['token'] ?? 'demo_token');
+      await StorageService.saveAuthToken(response['token'] ?? '');
       await StorageService.saveUserProfile(user);
 
       if (mounted) {
         widget.onLoginSuccess();
       }
     } else {
-      // Fallback for offline/demo login
-      if (email.contains('admin')) {
-        final adminUser = UserProfile(
-          id: 'admin_001',
-          email: email,
-          fullName: 'Platform Super Admin',
-          role: UserRole.superAdmin,
-          facilityId: 'platform_root',
-          createdAt: DateTime.now(),
-        );
-        await StorageService.saveAuthToken('super_admin_token');
-        await StorageService.saveUserProfile(adminUser);
-        if (mounted) widget.onLoginSuccess();
-      } else {
-        final demoUser = UserProfile(
-          id: 'user_demo',
-          email: email,
-          fullName: 'Hospital Quality Director',
-          role: UserRole.qualityManager,
-          facilityId: 'fac_default',
-          createdAt: DateTime.now(),
-        );
-        await StorageService.saveAuthToken('demo_token');
-        await StorageService.saveUserProfile(demoUser);
-        if (mounted) widget.onLoginSuccess();
-      }
+      setState(() => _errorMessage = response['message'] ?? 'Login failed. Please check your credentials.');
     }
 
-    setState(() => _loading = false);
+    if (mounted) {
+      setState(() => _loading = false);
+    }
   }
 
   @override
@@ -102,31 +88,35 @@ class _LoginScreenState extends State<LoginScreen> {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.1),
+                    color: _isSuperAdminMode 
+                        ? AppColors.secondary.withOpacity(0.15)
+                        : AppColors.primary.withOpacity(0.1),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
-                    Icons.health_and_safety_rounded,
+                    _isSuperAdminMode ? Icons.admin_panel_settings : Icons.health_and_safety_rounded,
                     size: 64,
-                    color: AppColors.primary,
+                    color: _isSuperAdminMode ? AppColors.secondary : AppColors.primary,
                   ),
                 ),
                 const SizedBox(height: 20),
-                const Text(
-                  'GAHAR Accreditation Platform',
+                Text(
+                  _isSuperAdminMode ? 'Super Admin Portal' : 'AccrediGo Platform',
                   textAlign: TextAlign.center,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
                 const SizedBox(height: 6),
-                const Text(
-                  'Enterprise Healthcare Quality & Compliance Platform',
+                Text(
+                  _isSuperAdminMode 
+                      ? 'Platform Administration & Facility Approvals' 
+                      : 'Enterprise Healthcare Quality & Compliance Platform',
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 13, color: Colors.grey),
+                  style: const TextStyle(fontSize: 13, color: Colors.grey),
                 ),
-                const SizedBox(height: 36),
+                const SizedBox(height: 28),
 
                 if (_errorMessage != null)
                   Container(
@@ -146,9 +136,9 @@ class _LoginScreenState extends State<LoginScreen> {
                 TextField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(
-                    labelText: 'Work Email / البريد الإلكتروني',
-                    prefixIcon: Icon(Icons.email_outlined),
+                  decoration: InputDecoration(
+                    labelText: _isSuperAdminMode ? 'Super Admin Email' : 'Work Email / البريد الإلكتروني',
+                    prefixIcon: const Icon(Icons.email_outlined),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -164,6 +154,11 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 ElevatedButton(
                   onPressed: _loading ? null : _handleLogin,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _isSuperAdminMode ? AppColors.secondary : AppColors.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
                   child: _loading
                       ? const SizedBox(
                           width: 20,
@@ -173,35 +168,52 @@ class _LoginScreenState extends State<LoginScreen> {
                             color: Colors.white,
                           ),
                         )
-                      : const Text('Sign In / تسجيل الدخول'),
+                      : Text(_isSuperAdminMode ? 'Sign In as Super Admin' : 'Sign In / تسجيل الدخول'),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 16),
 
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('New Healthcare Facility? ',
-                        style: TextStyle(fontSize: 13)),
-                    GestureDetector(
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => FacilityRegistrationScreen(
-                              onSuccess: widget.onLoginSuccess,
-                            ),
-                          ),
-                        );
+                    TextButton(
+                      onPressed: () {
+                        setState(() {
+                          _isSuperAdminMode = !_isSuperAdminMode;
+                          _emailController.clear();
+                          _passwordController.clear();
+                          _errorMessage = null;
+                        });
                       },
                       child: Text(
-                        'Register Facility',
+                        _isSuperAdminMode ? '← Facility Sign In' : 'Super Admin Login',
                         style: TextStyle(
-                          fontSize: 13,
+                          fontSize: 12,
+                          color: _isSuperAdminMode ? AppColors.primary : AppColors.secondary,
                           fontWeight: FontWeight.bold,
-                          color: AppColors.primary,
                         ),
                       ),
                     ),
+                    if (!_isSuperAdminMode)
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => FacilityRegistrationScreen(
+                                onSuccess: widget.onLoginSuccess,
+                              ),
+                            ),
+                          );
+                        },
+                        child: Text(
+                          'Register Facility',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ],
