@@ -7,7 +7,7 @@ import 'package:flutter_tts/flutter_tts.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
-
+import 'config/app_config.dart';
 import 'models/saved_document.dart';
 import 'models/platform_models.dart';
 import 'screens/compliance_dashboard_screen.dart';
@@ -22,6 +22,7 @@ import 'screens/experts_hub_screen.dart';
 import 'screens/facility_settings_screen.dart';
 import 'screens/admin/super_admin_screen.dart';
 import 'screens/auth/login_screen.dart';
+import 'services/api_service.dart';
 import 'services/export_service.dart';
 import 'services/storage_service.dart';
 import 'theme/app_theme.dart';
@@ -1201,72 +1202,33 @@ $context
     _scrollToBottom();
 
     try {
-      final groqKey = await AppSettings.getGroqKey();
-
-      if (groqKey.isEmpty) {
-        throw Exception(
-          'Groq API key is not set.\n'
-          'Please open Settings (⚙️) and enter your Groq API key.\n\n'
-          'Get a free key from: console.groq.com',
-        );
-      }
-
-      // RAG Retrieval from GAHAR Handbook
+      // RAG Retrieval from GAHAR Handbook (local BM25 search)
       final searchResults = _engine.search(
           query.isEmpty ? "GAHAR Hospital Accreditation Standards 2025" : query,
           topK: 5);
-      final context = searchResults.isNotEmpty
+      final ragContext = searchResults.isNotEmpty
           ? searchResults.map((r) => r.text).join('\n\n')
           : 'GAHAR Hospital Accreditation Standards 2025 General Requirements.';
 
-      final userPromptContent = _buildPromptForMode(
+      // Build full prompt for the mode
+      final fullPrompt = _buildPromptForMode(
         mode: mode,
         query: query,
-        context: context,
+        context: ragContext,
         docType: docType,
         pastedDocument: pastedDocument,
       );
 
-      final httpResponse = await http
-          .post(
-            Uri.parse(AppSettings.groqEndpoint),
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': 'Bearer $groqKey',
-            },
-            body: jsonEncode({
-              'model': AppSettings.model,
-              'messages': [
-                {
-                  'role': 'system',
-                  'content':
-                      'You are an expert Healthcare Accreditation Assistant for GAHAR 2025 Standards. Provide structured, authoritative, and practical guidance.',
-                },
-                {
-                  'role': 'user',
-                  'content': userPromptContent,
-                },
-              ],
-              'max_tokens': 2048,
-              'temperature': 0.3,
-            }),
-          )
-          .timeout(
-            const Duration(seconds: 60),
-            onTimeout: () => throw Exception(
-              'Request timed out. Please check your internet connection.',
-            ),
-          );
-
-      if (httpResponse.statusCode != 200) {
-        final errorBody = jsonDecode(httpResponse.body);
-        final errorMsg = errorBody['error']?['message'] ?? httpResponse.body;
-        throw Exception('Groq API error: $errorMsg');
-      }
-
-      final data = jsonDecode(httpResponse.body) as Map<String, dynamic>;
-      final reply = data['choices']?[0]?['message']?['content'] as String? ??
-          'No response generated.';
+      // Call backend proxy — API key stays server-side
+      final reply = await ApiService.getCopilotResponse(
+        prompt: fullPrompt,
+        screenContext: 'AI Copilot — ${mode.name}',
+        entityData: {
+          'mode': mode.name,
+          'docType': docType,
+          'hasDocument': pastedDocument != null,
+        },
+      );
 
       setState(() {
         _messages.add(ChatMessage(
@@ -2685,7 +2647,7 @@ class WidgetToAnimateGlow extends StatelessWidget {
   }
 }
 
-// ─── Settings Modal Sheet Widget ──────────────────────────────────────────────
+// ─── AI Settings Modal Sheet ──────────────────────────────────────────────────
 class AppSettingsSheet extends StatefulWidget {
   const AppSettingsSheet({super.key});
 
@@ -2694,54 +2656,33 @@ class AppSettingsSheet extends StatefulWidget {
 }
 
 class _AppSettingsSheetState extends State<AppSettingsSheet> {
-  final _urlController = TextEditingController();
-  bool _saving = false;
+  bool _testing = false;
+  String? _testResult;
+  bool? _testSuccess;
 
-  @override
-  void initState() {
-    super.initState();
-    _loadSettings();
-  }
-
-  Future<void> _loadSettings() async {
-    final key = await AppSettings.getGroqKey();
+  Future<void> _testConnection() async {
     setState(() {
-      _urlController.text = key;
+      _testing = true;
+      _testResult = null;
+      _testSuccess = null;
     });
-  }
-
-  Future<void> _saveSettings() async {
-    final key = _urlController.text.trim();
-    if (key.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter your Groq API key.'), backgroundColor: Colors.redAccent),
+    try {
+      final reply = await ApiService.getCopilotResponse(
+        prompt: 'Hello, confirm you are active.',
+        screenContext: 'Connection Test',
       );
-      return;
+      setState(() {
+        _testSuccess = true;
+        _testResult = '✅ AI Copilot connected and active!';
+        _testing = false;
+      });
+    } catch (e) {
+      setState(() {
+        _testSuccess = false;
+        _testResult = '❌ Cannot reach backend: ${e.toString().split('\n').first}';
+        _testing = false;
+      });
     }
-    if (!key.startsWith('gsk_')) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Invalid key. Groq keys start with "gsk_"'), backgroundColor: Colors.orange),
-      );
-      return;
-    }
-    setState(() => _saving = true);
-    await AppSettings.setGroqKey(key);
-    setState(() => _saving = false);
-    if (mounted) {
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Groq API key saved! AI Assistant is ready ✅'),
-          backgroundColor: Color(0xFF5B4FCF),
-        ),
-      );
-    }
-  }
-
-  @override
-  void dispose() {
-    _urlController.dispose();
-    super.dispose();
   }
 
   @override
@@ -2782,10 +2723,10 @@ class _AppSettingsSheetState extends State<AppSettingsSheet> {
             // Title row
             Row(
               children: [
-                Icon(Icons.vpn_key_rounded, color: cs.primary),
+                Icon(Icons.smart_toy_rounded, color: cs.primary),
                 const SizedBox(width: 10),
                 Text(
-                  'AI Settings',
+                  'AI Copilot Settings',
                   style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
@@ -2794,98 +2735,130 @@ class _AppSettingsSheetState extends State<AppSettingsSheet> {
                 ),
               ],
             ),
-            const SizedBox(height: 8),
-            // Info card
+            const SizedBox(height: 16),
+            // Security info card
             Container(
-              margin: const EdgeInsets.only(top: 4, bottom: 16),
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: cs.primary.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: cs.primary.withValues(alpha: 0.2)),
+                color: Colors.green.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
               ),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.shield_outlined, size: 16, color: cs.primary),
-                  const SizedBox(width: 8),
+                  const Icon(Icons.shield_rounded, size: 20, color: Colors.green),
+                  const SizedBox(width: 10),
                   Expanded(
-                    child: Text(
-                      'AccrediGo AI Copilot operates securely through your enterprise backend server. API keys and credentials remain server-side.',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: isDark ? Colors.white60 : Colors.black54,
-                        height: 1.5,
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Enterprise Secure Mode',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? Colors.white : Colors.black87,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'AccrediGo AI Copilot runs through your secure enterprise backend. No API keys are stored in the app — all AI credentials are kept server-side.',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: isDark ? Colors.white60 : Colors.black54,
+                            height: 1.5,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
             ),
-            // Groq API Key field
-            Text(
-              'Groq API Key',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: isDark ? Colors.white70 : Colors.black54,
+            const SizedBox(height: 16),
+            // Backend URL
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF0B0B16) : const Color(0xFFF3F3FA),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.dns_rounded, size: 16, color: cs.primary),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Backend: ',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.white60 : Colors.black54,
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      AppConfig.baseUrl,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: cs.primary,
+                        fontFamily: 'monospace',
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _urlController,
-              keyboardType: TextInputType.visiblePassword,
-              obscureText: true,
-              style: TextStyle(color: isDark ? Colors.white : Colors.black87),
-              decoration: InputDecoration(
-                filled: true,
-                fillColor: isDark ? const Color(0xFF0B0B16) : const Color(0xFFF3F3FA),
-                hintText: 'gsk_xxxxxxxxxxxxxxxxxxxxxxxx',
-                hintStyle: TextStyle(color: isDark ? Colors.white30 : Colors.black38),
-                prefixIcon: Icon(Icons.key_rounded, color: cs.primary),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
+            if (_testResult != null) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: (_testSuccess == true ? Colors.green : Colors.red)
+                      .withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: (_testSuccess == true ? Colors.green : Colors.red)
+                        .withValues(alpha: 0.3),
+                  ),
                 ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: cs.primary, width: 1.5),
+                child: Text(
+                  _testResult!,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: _testSuccess == true ? Colors.green : Colors.red,
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 24),
-            // Save button
+            ],
+            const SizedBox(height: 20),
             SizedBox(
               width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _saving ? null : _saveSettings,
+              child: ElevatedButton.icon(
+                onPressed: _testing ? null : _testConnection,
+                icon: _testing
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Icon(Icons.wifi_tethering_rounded, size: 18),
+                label: Text(_testing ? 'Testing...' : 'Test Connection'),
                 style: ElevatedButton.styleFrom(
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   backgroundColor: cs.primary,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
-                child: _saving
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                      )
-                    : const Text('Save API Key'),
               ),
             ),
-            const SizedBox(height: 16),
-            Center(
-              child: GestureDetector(
-                onTap: () {},
-                child: Text(
-                  'Get a FREE Groq key → console.groq.com',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: cs.primary,
-                    decoration: TextDecoration.underline,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
+            const SizedBox(height: 10),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(
+                'Close',
+                style: TextStyle(color: isDark ? Colors.white54 : Colors.black45),
               ),
             ),
           ],
