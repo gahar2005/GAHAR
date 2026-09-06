@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/chat_session.dart';
@@ -11,7 +12,9 @@ import '../models/saved_document.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class StorageService {
-  static const FlutterSecureStorage _secureStorage = FlutterSecureStorage();
+  // flutter_secure_storage is not supported on web; we fall back to SharedPreferences
+  static FlutterSecureStorage? get _secureStorage =>
+      kIsWeb ? null : const FlutterSecureStorage();
   static const String _profileKey = 'gahar_hospital_profile';
   static const String _docsKey = 'gahar_saved_documents';
   static const String _evidenceKey = 'gahar_evidence_items';
@@ -25,17 +28,26 @@ class StorageService {
   static const String _actionsKey = 'gahar_action_plans';
   static const String _licensesKey = 'gahar_licenses';
 
-  // ─── Authentication & User Session (Secure Storage) ───────────────────────
+  // ─── Authentication & User Session (Secure Storage with web fallback) ───────
   static Future<String?> getAuthToken() async {
     try {
-      return await _secureStorage.read(key: _tokenKey);
+      if (kIsWeb) {
+        final prefs = await SharedPreferences.getInstance();
+        return prefs.getString(_tokenKey);
+      }
+      return await _secureStorage!.read(key: _tokenKey);
     } catch (_) {
       return null;
     }
   }
 
   static Future<void> saveAuthToken(String token) async {
-    await _secureStorage.write(key: _tokenKey, value: token);
+    if (kIsWeb) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_tokenKey, token);
+    } else {
+      await _secureStorage!.write(key: _tokenKey, value: token);
+    }
   }
 
   static Future<UserProfile?> getUserProfile() async {
@@ -55,7 +67,12 @@ class StorageService {
   }
 
   static Future<void> clearSession() async {
-    await _secureStorage.delete(key: _tokenKey);
+    if (kIsWeb) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_tokenKey);
+    } else {
+      await _secureStorage!.delete(key: _tokenKey);
+    }
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_userKey);
   }

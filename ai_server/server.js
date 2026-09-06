@@ -25,8 +25,15 @@ const Groq = require("groq-sdk");
 const groq = process.env.GROQ_API_KEY ? new Groq({ apiKey: process.env.GROQ_API_KEY }) : null;
 
 const app = express();
-app.use(helmet());
-app.use(cors());
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+}));
+app.use(cors({
+  origin: true, // Allow all origins in dev; restrict in production
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Facility-Id"],
+  credentials: true,
+}));
 app.use(express.json({ limit: "10mb" }));
 
 const JWT_SECRET = process.env.JWT_SECRET || "accredigo_secure_production_jwt_secret_key_2026";
@@ -463,28 +470,55 @@ Current Screen/Context: "${screenContext}".
 Entity Data: ${JSON.stringify(entityData || {})}.
 Provide professional, accurate, structured GAHAR 2025 guidance in Arabic or English. Do not invent non-existent standard codes.`;
 
+  // Try Groq models in order of preference
   if (groq) {
+    const groqModels = [
+      process.env.GROQ_MODEL || "llama3-70b-8192",
+      "llama3-70b-8192",
+      "llama-3.1-70b-versatile",
+      "gemma2-9b-it",
+      "llama-3.1-8b-instant",
+      "mixtral-8x7b-32768",
+    ];
+
+    for (const model of groqModels) {
+      if (reply) break;
+      try {
+        const completion = await groq.chat.completions.create({
+          model,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: prompt },
+          ],
+          max_tokens: 1024,
+        });
+        reply = completion.choices[0].message?.content || "";
+        if (reply) console.log(`✅ Groq model used: ${model}`);
+      } catch (e) {
+        console.warn(`⚠️ Groq model ${model} failed:`, e.message?.split('\n')[0]);
+      }
+    }
+  }
+
+  // Fallback to Gemini
+  if (!reply && genAI) {
     try {
-      const groqModel = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
-      const completion = await groq.chat.completions.create({
-        model: groqModel,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: prompt },
-        ],
-      });
-      reply = completion.choices[0].message?.content || "";
+      const model = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || "gemini-2.0-flash" });
+      const result = await model.generateContent(`${systemPrompt}\n\nUser: ${prompt}`);
+      reply = result.response.text();
+      if (reply) console.log("✅ Gemini fallback used");
     } catch (e) {
-      console.warn("⚠️ Groq copilot error:", e.message);
+      console.warn("⚠️ Gemini copilot error:", e.message?.split('\n')[0]);
     }
   }
 
   if (!reply) {
-    reply = `[GAHAR Copilot - ${screenContext}]: For full GAHAR 2025 compliance in ${screenContext}, ensure all Evidence of Compliance (EOC) items are documented, approved by your Quality Committee, and verified before the official survey.`;
+    reply = `**GAHAR 2025 Guidance — ${screenContext}**\n\nFor full GAHAR 2025 compliance in ${screenContext}, ensure all Evidence of Compliance (EOC) items are:\n1. Documented with date and responsible person\n2. Approved by your Quality Committee\n3. Available for review during the official survey\n4. Cross-referenced with the relevant GAHAR standard code\n\nContact your GAHAR consultant for specific standard requirements.`;
   }
 
   res.json({ success: true, reply });
 });
+
 
 // =============================================================================
 // Start Backend Server
