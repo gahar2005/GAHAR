@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:my_app/config/app_config.dart';
 import 'package:my_app/models/platform_models.dart';
+import 'package:my_app/services/api_service.dart';
 import 'package:my_app/services/storage_service.dart';
 import 'package:my_app/screens/auth/login_screen.dart';
 import 'package:my_app/theme/app_theme.dart';
@@ -75,6 +77,34 @@ void main() {
       expect(retrieved, isNotNull);
       expect(retrieved!.email, equals('test@gahar.gov.eg'));
       expect(retrieved.role, equals(UserRole.superAdmin));
+    });
+
+    test('ApiService.checkUnauthorized(401) triggers session expiration and clears stored credentials', () async {
+      await StorageService.saveAuthToken('active_jwt_token_123');
+      expect(await StorageService.getAuthToken(), equals('active_jwt_token_123'));
+
+      bool sessionExpiredFired = false;
+      ApiService.onSessionExpired = () {
+        sessionExpiredFired = true;
+      };
+
+      ApiService.checkUnauthorized(401);
+      // Allow async session clear
+      await Future.delayed(const Duration(milliseconds: 50));
+
+      expect(sessionExpiredFired, isTrue);
+      expect(await StorageService.getAuthToken(), isNull);
+    });
+
+    test('AppConfig normalizes custom base URL and preserves /api suffix', () async {
+      await AppConfig.setCustomBaseUrl('https://my-backend.onrender.com');
+      expect(AppConfig.baseUrl, equals('https://my-backend.onrender.com/api'));
+
+      await AppConfig.setCustomBaseUrl('https://my-backend.onrender.com/api/');
+      expect(AppConfig.baseUrl, equals('https://my-backend.onrender.com/api'));
+
+      await AppConfig.setCustomBaseUrl(null);
+      expect(AppConfig.baseUrl, contains('/api'));
     });
   });
 

@@ -74,7 +74,30 @@ app.use(cors({
 }));
 app.use(express.json({ limit: "20mb" }));
 
-const JWT_SECRET = process.env.JWT_SECRET || "GAHAR_secure_production_jwt_secret_key_2026";
+// =============================================================================
+// Health Check Endpoint (Platform liveness and readiness probe)
+// =============================================================================
+app.get("/health", (req, res) => {
+  res.status(200).json({
+    status: "ok",
+    timestamp: new Date().toISOString(),
+    service: "GAHAR Accreditation Platform API",
+  });
+});
+
+// Production secret validation: fail safely at startup if required secrets are missing
+if (isProduction) {
+  if (!process.env.JWT_SECRET) {
+    console.error("❌ FATAL: JWT_SECRET environment variable is required in production mode.");
+    process.exit(1);
+  }
+  if (!process.env.SUPER_ADMIN_PASSWORD) {
+    console.error("❌ FATAL: SUPER_ADMIN_PASSWORD environment variable is required in production mode.");
+    process.exit(1);
+  }
+}
+
+const JWT_SECRET = process.env.JWT_SECRET || (isProduction ? null : "GAHAR_dev_jwt_secret_key_2026_fallback");
 const SUPER_ADMIN_EMAIL = process.env.SUPER_ADMIN_EMAIL || "admin@gahar-platform.eg";
 
 // =============================================================================
@@ -168,10 +191,8 @@ app.post("/api/auth/super-admin/login", async (req, res) => {
     email.toLowerCase().includes('gahar')
   );
 
-  const isValidSuperAdminPassword = 
-    password === (process.env.SUPER_ADMIN_PASSWORD || "SuperAdmin@2026!") ||
-    password === "Mohaned@2005?" ||
-    password === "SuperAdmin@2026!";
+  const expectedSuperAdminPassword = process.env.SUPER_ADMIN_PASSWORD || (isProduction ? null : "SuperAdmin@2026!");
+  const isValidSuperAdminPassword = expectedSuperAdminPassword ? password === expectedSuperAdminPassword : false;
 
   if (isSuperAdminEmail && isValidSuperAdminPassword) {
     const token = jwt.sign(
@@ -2505,6 +2526,6 @@ app.use((err, req, res, next) => {
 // =============================================================================
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+app.listen(PORT, "0.0.0.0", () => {
   console.log(`🚀 GAHAR Healthcare Accreditation Platform — Backend Server running on port ${PORT}`);
 });

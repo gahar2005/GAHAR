@@ -29,8 +29,9 @@ import 'services/export_service.dart';
 import 'services/storage_service.dart';
 import 'theme/app_theme.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await AppConfig.init();
   runApp(const MyApp());
 }
 
@@ -572,6 +573,8 @@ class HighlightText extends StatelessWidget {
 }
 
 // ─── App Entry Point ──────────────────────────────────────────────────────────
+final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
+
 class MyApp extends StatefulWidget {
   const MyApp({super.key});
 
@@ -585,6 +588,28 @@ class MyApp extends StatefulWidget {
 class MyAppState extends State<MyApp> {
   ThemeMode _themeMode = ThemeMode.dark;
 
+  @override
+  void initState() {
+    super.initState();
+    // Centralized session expiration listener: clear session and redirect to Login
+    ApiService.onSessionExpired = () {
+      final context = appNavigatorKey.currentContext;
+      if (context != null) {
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          const SnackBar(
+            content: Text('Your session has expired. Please log in again.'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 4),
+          ),
+        );
+      }
+      appNavigatorKey.currentState?.pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        (route) => false,
+      );
+    };
+  }
+
   void toggleTheme() {
     setState(() {
       _themeMode = _themeMode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
@@ -596,6 +621,7 @@ class MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: appNavigatorKey,
       title: "GAHAR",
       debugShowCheckedModeBanner: false,
       themeMode: _themeMode,

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../config/app_config.dart';
 import '../../models/hospital_profile.dart';
 import '../../models/platform_models.dart';
 import '../../services/api_service.dart';
@@ -330,6 +331,17 @@ class _LoginScreenState extends State<LoginScreen> {
           borderColor: const Color(0xFFB45309).withValues(alpha: 0.5),
           onTap: () => _switchMode(AuthViewMode.superAdminLogin),
         ),
+        const SizedBox(height: 20),
+        Center(
+          child: TextButton.icon(
+            onPressed: () => _showServerConfigDialog(context),
+            icon: const Icon(Icons.dns_rounded, size: 14, color: Color(0xFF64748B)),
+            label: Text(
+              'Server: ${AppConfig.baseUrl}',
+              style: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -495,6 +507,11 @@ class _LoginScreenState extends State<LoginScreen> {
                   ],
                 ),
               ),
+              IconButton(
+                icon: const Icon(Icons.dns_rounded, color: Colors.white54, size: 20),
+                tooltip: 'Configure Server IP',
+                onPressed: () => _showServerConfigDialog(context),
+              ),
             ],
           ),
           const SizedBox(height: 18),
@@ -509,14 +526,36 @@ class _LoginScreenState extends State<LoginScreen> {
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: AppColors.error.withValues(alpha: 0.6)),
               ),
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.error_outline_rounded, color: AppColors.error, size: 20),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      _errorMessage!,
-                      style: const TextStyle(color: Color(0xFFFCA5A5), fontSize: 12),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.error_outline_rounded, color: AppColors.error, size: 20),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          _errorMessage!,
+                          style: const TextStyle(color: Color(0xFFFCA5A5), fontSize: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        backgroundColor: Colors.white.withValues(alpha: 0.1),
+                      ),
+                      icon: const Icon(Icons.dns_rounded, size: 14, color: Color(0xFFFBBF24)),
+                      label: const Text(
+                        'تعديل عنوان السيرفر (Server IP)',
+                        style: TextStyle(color: Color(0xFFFBBF24), fontSize: 11, fontWeight: FontWeight.bold),
+                      ),
+                      onPressed: () => _showServerConfigDialog(context),
                     ),
                   ),
                 ],
@@ -660,6 +699,127 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showServerConfigDialog(BuildContext context) {
+    final textController = TextEditingController(text: AppConfig.baseUrl);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.dns_rounded, color: Color(0xFF38BDF8), size: 24),
+            SizedBox(width: 8),
+            Text(
+              'Server IP Settings',
+              style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        content: StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            return SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'أدخل عنوان السيرفر والمنفذ 3000:',
+                    style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: textController,
+                    style: const TextStyle(color: Colors.white, fontSize: 14),
+                    decoration: InputDecoration(
+                      hintText: 'http://192.168.1.7:3000/api',
+                      hintStyle: const TextStyle(color: Colors.white30),
+                      filled: true,
+                      fillColor: const Color(0xFF0F172A),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'خيارات سريعة (Quick Options):',
+                    style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: [
+                      ActionChip(
+                        backgroundColor: const Color(0xFF334155),
+                        label: const Text('Wi-Fi PC (192.168.1.7)', style: TextStyle(color: Colors.white, fontSize: 11)),
+                        onPressed: () {
+                          setDialogState(() {
+                            textController.text = 'http://192.168.1.7:3000/api';
+                          });
+                        },
+                      ),
+                      ActionChip(
+                        backgroundColor: const Color(0xFF334155),
+                        label: const Text('محاكي (10.0.2.2)', style: TextStyle(color: Colors.white, fontSize: 11)),
+                        onPressed: () {
+                          setDialogState(() {
+                            textController.text = 'http://10.0.2.2:3000/api';
+                          });
+                        },
+                      ),
+                      ActionChip(
+                        backgroundColor: const Color(0xFF334155),
+                        label: const Text('Localhost', style: TextStyle(color: Colors.white, fontSize: 11)),
+                        onPressed: () {
+                          setDialogState(() {
+                            textController.text = 'http://localhost:3000/api';
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('إلغاء', style: TextStyle(color: Colors.white60)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF0284C7),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () async {
+              await AppConfig.setCustomBaseUrl(textController.text);
+              if (mounted) {
+                setState(() {
+                  _errorMessage = null;
+                });
+              }
+              if (ctx.mounted) {
+                Navigator.pop(ctx);
+              }
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('تم ضبط عنوان السيرفر: ${AppConfig.baseUrl}'),
+                    backgroundColor: const Color(0xFF059669),
+                  ),
+                );
+              }
+            },
+            child: const Text('حفظ واتصال', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),

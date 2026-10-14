@@ -62,8 +62,16 @@ async function uploadDocument({ facilityId, originalName, mimeType, base64Conten
   const safeFileName = `${fileId}${ext}`;
   const storagePath = `facilities/${facilityId}/documents/${safeFileName}`;
 
+  const isProduction = process.env.NODE_ENV === 'production';
+  const hasSupabaseConfig = !!(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
+
+  // In production, refuse silent fallback to ephemeral container disk
+  if (isProduction && !hasSupabaseConfig) {
+    throw new Error('Supabase Storage configuration (SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY) is required in production mode. Refusing silent fallback to ephemeral local storage.');
+  }
+
   // Supabase Storage implementation
-  if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  if (hasSupabaseConfig) {
     try {
       const bucketName = process.env.SUPABASE_STORAGE_BUCKET || 'gahar-documents';
       const uploadUrl = `${process.env.SUPABASE_URL}/storage/v1/object/${bucketName}/${storagePath}`;
@@ -86,15 +94,24 @@ async function uploadDocument({ facilityId, originalName, mimeType, base64Conten
           sizeBytes: buffer.length,
           originalName,
           mimeType,
-          publicUrl: `${process.env.SUPABASE_URL}/storage/v1/object/public/${bucketName}/${storagePath}`,
+          publicUrl: null, // Healthcare documents remain private; served via authenticated /download
         };
+      } else {
+        const errorText = await response.text();
+        if (isProduction) {
+          throw new Error(`Failed to upload document to Supabase Storage (HTTP ${response.status}): ${errorText}`);
+        }
+        console.warn('⚠️ Supabase Storage upload failed, falling back to secure local tenant storage in dev:', errorText);
       }
     } catch (err) {
+      if (isProduction) {
+        throw err;
+      }
       console.warn('⚠️ Supabase Storage upload failed, falling back to secure local tenant storage:', err.message);
     }
   }
 
-  // Local Tenant-Isolated Storage
+  // Local Tenant-Isolated Storage (development/testing only)
   const tenantDir = path.join(LOCAL_STORAGE_ROOT, facilityId);
   if (!fs.existsSync(tenantDir)) {
     fs.mkdirSync(tenantDir, { recursive: true });
@@ -111,6 +128,7 @@ async function uploadDocument({ facilityId, originalName, mimeType, base64Conten
     sizeBytes: buffer.length,
     originalName,
     mimeType,
+    publicUrl: null,
   };
 }
 
@@ -118,14 +136,21 @@ async function uploadDocument({ facilityId, originalName, mimeType, base64Conten
  * Retrieves a document with strict facility ownership verification
  */
 async function getDocumentBuffer({ facilityId, storagePath }) {
+  const isProduction = process.env.NODE_ENV === 'production';
+  const hasSupabaseConfig = !!(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
+
   // Path traversal check: ensure path belongs to the given facility
   const expectedPrefix = `facilities/${facilityId}/`;
   if (!storagePath.startsWith(expectedPrefix)) {
     throw new Error('Access Denied: Cross-tenant storage access detected.');
   }
 
+  if (isProduction && !hasSupabaseConfig) {
+    throw new Error('Supabase Storage configuration is required to retrieve documents in production mode.');
+  }
+
   // Supabase Storage fetch
-  if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  if (hasSupabaseConfig) {
     try {
       const bucketName = process.env.SUPABASE_STORAGE_BUCKET || 'gahar-documents';
       const fetchUrl = `${process.env.SUPABASE_URL}/storage/v1/object/${bucketName}/${storagePath}`;
@@ -139,13 +164,18 @@ async function getDocumentBuffer({ facilityId, storagePath }) {
       if (res.ok) {
         const arrayBuf = await res.arrayBuffer();
         return Buffer.from(arrayBuf);
+      } else if (isProduction) {
+        throw new Error(`Failed to retrieve document from Supabase Storage (HTTP ${res.status}).`);
       }
     } catch (err) {
+      if (isProduction) {
+        throw err;
+      }
       console.warn('⚠️ Supabase Storage fetch error:', err.message);
     }
   }
 
-  // Local file lookup
+  // Local file lookup (development/testing fallback)
   const fileName = path.basename(storagePath);
   const localFile = path.join(LOCAL_STORAGE_ROOT, facilityId, fileName);
 

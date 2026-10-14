@@ -18,6 +18,65 @@ class ApiService {
     };
   }
 
+  static VoidCallback? onSessionExpired;
+  static bool _isHandlingSessionExpiration = false;
+
+  /// Centralized session expiration handler to clear session credentials and redirect to login
+  static Future<void> handleSessionExpired() async {
+    if (_isHandlingSessionExpiration) return;
+    _isHandlingSessionExpiration = true;
+
+    try {
+      debugPrint('[API] 401 Unauthorized encountered. Clearing session credentials.');
+      await StorageService.clearSession();
+      if (onSessionExpired != null) {
+        onSessionExpired!();
+      }
+    } catch (e) {
+      debugPrint('[API] Error during session expiration handling: $e');
+    } finally {
+      // Prevent rapid redirect loops while navigation transition occurs
+      Future.delayed(const Duration(seconds: 3), () {
+        _isHandlingSessionExpiration = false;
+      });
+    }
+  }
+
+  /// Checks HTTP response status and triggers session expiration on 401
+  static void checkUnauthorized(int statusCode) {
+    if (statusCode == 401) {
+      handleSessionExpired();
+    }
+  }
+
+  static Future<http.Response> _authGet(Uri uri) async {
+    final headers = await _getHeaders();
+    final res = await http.get(uri, headers: headers);
+    checkUnauthorized(res.statusCode);
+    return res;
+  }
+
+  static Future<http.Response> _authPost(Uri uri, {Object? body}) async {
+    final headers = await _getHeaders();
+    final res = await http.post(uri, headers: headers, body: body);
+    checkUnauthorized(res.statusCode);
+    return res;
+  }
+
+  static Future<http.Response> _authPut(Uri uri, {Object? body}) async {
+    final headers = await _getHeaders();
+    final res = await http.put(uri, headers: headers, body: body);
+    checkUnauthorized(res.statusCode);
+    return res;
+  }
+
+  static Future<http.Response> _authDelete(Uri uri) async {
+    final headers = await _getHeaders();
+    final res = await http.delete(uri, headers: headers);
+    checkUnauthorized(res.statusCode);
+    return res;
+  }
+
   // ─── Auth API ─────────────────────────────────────────────────────────────
   static Future<Map<String, dynamic>> superAdminLogin(String email, String password) async {
     final url = '$baseUrl/auth/super-admin/login';
