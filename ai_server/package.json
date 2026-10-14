@@ -1,13 +1,18 @@
 {
   "name": "ai_server",
   "version": "1.0.0",
-  "description": "AccrediGo Multi-Tenant Production Backend Server",
+  "description": "GAHAR Multi-Tenant Production Backend Server",
   "main": "server.js",
   "scripts": {
     "test": "node test_backend.js",
     "start": "node server.js"
   },
-  "keywords": ["accredigo", "gahar", "accreditation", "multi-tenant"],
+  "keywords": [
+    "gahar",
+    "accreditation",
+    "healthcare",
+    "multi-tenant"
+  ],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
@@ -26,6 +31,7 @@
     "openai": "^4.33.0",
     "pdfjs-dist": "^3.11.174",
     "pg": "^8.11.5",
-    "uuid": "^9.0.1"
+    "uuid": "^9.0.1",
+    "xlsx": "^0.18.5"
   }
 }

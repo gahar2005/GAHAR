@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/api_service.dart';
+import '../../services/sat_service.dart';
 import '../../services/storage_service.dart';
 import '../../theme/app_theme.dart';
 
@@ -17,12 +18,13 @@ class _SuperAdminScreenState extends State<SuperAdminScreen> with SingleTickerPr
   List<dynamic> _facilities = [];
   Map<String, dynamic> _analytics = {};
   List<dynamic> _auditLogs = [];
+  Map<String, dynamic> _satSummary = {};
   bool _loading = true;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     _loadAdminData();
   }
 
@@ -31,12 +33,14 @@ class _SuperAdminScreenState extends State<SuperAdminScreen> with SingleTickerPr
     final facilitiesData = await ApiService.getAdminFacilities();
     final analyticsData = await ApiService.getAdminAnalytics();
     final auditLogsData = await ApiService.getAdminAuditLogs();
+    final satSummaryData = await SATService.getAdminPlatformSummary();
 
     if (mounted) {
       setState(() {
         _facilities = facilitiesData;
         _analytics = analyticsData;
         _auditLogs = auditLogsData;
+        _satSummary = satSummaryData;
         _loading = false;
       });
     }
@@ -44,6 +48,7 @@ class _SuperAdminScreenState extends State<SuperAdminScreen> with SingleTickerPr
 
   Future<void> _updateStatus(String facilityId, String status, {String? reason}) async {
     final res = await ApiService.updateFacilityStatus(facilityId, status, reason: reason);
+    if (!mounted) return;
     if (res['success'] == true) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -66,7 +71,16 @@ class _SuperAdminScreenState extends State<SuperAdminScreen> with SingleTickerPr
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Super Admin Platform Portal'),
+        title: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.asset('assets/logo.png', width: 32, height: 32, fit: BoxFit.cover),
+            ),
+            const SizedBox(width: 12),
+            const Text('GAHAR — Super Admin'),
+          ],
+        ),
         backgroundColor: AppColors.secondary,
         foregroundColor: Colors.white,
         actions: [
@@ -91,6 +105,7 @@ class _SuperAdminScreenState extends State<SuperAdminScreen> with SingleTickerPr
             Tab(icon: Icon(Icons.local_hospital), text: 'Facilities'),
             Tab(icon: Icon(Icons.analytics), text: 'Analytics'),
             Tab(icon: Icon(Icons.security), text: 'Audit Logs'),
+            Tab(icon: Icon(Icons.rule_folder_rounded), text: 'SAT Overview'),
           ],
         ),
       ),
@@ -102,6 +117,7 @@ class _SuperAdminScreenState extends State<SuperAdminScreen> with SingleTickerPr
                 _buildFacilitiesTab(),
                 _buildAnalyticsTab(),
                 _buildAuditLogsTab(),
+                _buildSatOverviewTab(),
               ],
             ),
     );
@@ -156,10 +172,10 @@ class _SuperAdminScreenState extends State<SuperAdminScreen> with SingleTickerPr
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
                               color: isPending
-                                  ? AppColors.warning.withOpacity(0.15)
+                                  ? AppColors.warning.withValues(alpha: 0.15)
                                   : isApproved
-                                      ? AppColors.success.withOpacity(0.15)
-                                      : AppColors.error.withOpacity(0.15),
+                                      ? AppColors.success.withValues(alpha: 0.15)
+                                      : AppColors.error.withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
@@ -344,6 +360,174 @@ class _SuperAdminScreenState extends State<SuperAdminScreen> with SingleTickerPr
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildSatOverviewTab() {
+    final summary = _satSummary['summary'] as Map<String, dynamic>? ?? {};
+    final totalFacilities = summary['total_facilities_with_sat'] ?? 0;
+    final totalScores = summary['total_sat_scores_recorded'] ?? 0;
+    final fullyMet = summary['fully_met_count'] ?? 0;
+    final partiallyMet = summary['partially_met_count'] ?? 0;
+    final notMet = summary['not_met_count'] ?? 0;
+    final totalStandards = summary['total_standards'] ?? 29;
+
+    return RefreshIndicator(
+      onRefresh: _loadAdminData,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Hospital SAT Platform-Wide Overview',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Aggregated performance across all registered healthcare facilities',
+              style: TextStyle(fontSize: 12, color: AppColors.textSecondaryLight),
+            ),
+            const SizedBox(height: 16),
+
+            // Top KPI row
+            Row(
+              children: [
+                Expanded(
+                  child: _buildStatCard(
+                    title: 'Active Facilities',
+                    value: '$totalFacilities',
+                    icon: Icons.domain_rounded,
+                    color: AppColors.primary,
+                  ),
+                ),
+                Expanded(
+                  child: _buildStatCard(
+                    title: 'Standards Library',
+                    value: '$totalStandards',
+                    icon: Icons.checklist_rounded,
+                    color: AppColors.accent,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildStatCard(
+                    title: 'Total Assessed Items',
+                    value: '$totalScores',
+                    icon: Icons.assignment_turned_in_rounded,
+                    color: AppColors.primaryLight,
+                  ),
+                ),
+                Expanded(
+                  child: _buildStatCard(
+                    title: 'Fully Met Records',
+                    value: '$fullyMet',
+                    icon: Icons.check_circle_rounded,
+                    color: AppColors.success,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+
+            // Status Distribution Card
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Cross-Facility Compliance Distribution',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                    ),
+                    const SizedBox(height: 14),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        _buildStatusStat('Fully Met', '$fullyMet', AppColors.success),
+                        _buildStatusStat('Partially Met', '$partiallyMet', AppColors.warning),
+                        _buildStatusStat('Not Met', '$notMet', AppColors.error),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Chapter Coverage Card
+            const Card(
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.health_and_safety_rounded, color: AppColors.primary),
+                        SizedBox(width: 8),
+                        Text(
+                          'Accreditation Chapter Coverage',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 12),
+                    ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: CircleAvatar(
+                        backgroundColor: AppColors.primaryLight,
+                        foregroundColor: Colors.white,
+                        radius: 14,
+                        child: Text('1', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                      ),
+                      title: Text('General Safety Requirements (GSR)', style: TextStyle(fontWeight: FontWeight.w600)),
+                      subtitle: Text('29 National Safety Requirements (NSR) standards seeded from Hospital SAT 2025 workbook'),
+                      trailing: Chip(
+                        label: Text('Active', style: TextStyle(fontSize: 10, color: Colors.white)),
+                        backgroundColor: AppColors.success,
+                      ),
+                    ),
+                    Divider(),
+                    ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: CircleAvatar(
+                        backgroundColor: Colors.grey,
+                        foregroundColor: Colors.white,
+                        radius: 14,
+                        child: Text('2', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                      ),
+                      title: Text('Quality & Patient Safety Indicators (QPI)', style: TextStyle(fontWeight: FontWeight.w600)),
+                      subtitle: Text('Framework prepared — extensible for full workbook expansion'),
+                      trailing: Chip(
+                        label: Text('Extensible', style: TextStyle(fontSize: 10)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatusStat(String label, String value, Color color) {
+    return Column(
+      children: [
+        Text(value, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: color)),
+        const SizedBox(height: 4),
+        Text(label, style: const TextStyle(fontSize: 11, color: AppColors.textSecondaryLight)),
+      ],
     );
   }
 }

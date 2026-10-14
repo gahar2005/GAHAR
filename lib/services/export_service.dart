@@ -7,6 +7,25 @@ import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
 
 class ExportService {
+  /// Convenience aliases for document export
+  static Future<void> exportToPdf({
+    required String title,
+    required String content,
+    String? documentType,
+    String? standard,
+  }) async {
+    await printDocument(title, content);
+  }
+
+  static Future<void> exportToWord({
+    required String title,
+    required String content,
+    String? documentType,
+    String? standard,
+  }) async {
+    await shareWordDoc(title, content);
+  }
+
   /// Generate a PDF document from title and markdown/plain text
   static Future<Uint8List> generatePdfBytes(String title, String content) async {
     final pdf = pw.Document();
@@ -30,7 +49,7 @@ class ExportService {
               children: [
                 pw.Text(
                   'GAHAR Accreditation Document',
-                  style: pw.TextStyle(
+                  style: const pw.TextStyle(
                     fontSize: 10,
                     color: PdfColors.grey700,
                     fontWeight: pw.FontWeight.bold,
@@ -38,7 +57,7 @@ class ExportService {
                 ),
                 pw.Text(
                   title,
-                  style: pw.TextStyle(
+                  style: const pw.TextStyle(
                     fontSize: 10,
                     color: PdfColors.indigo900,
                   ),
@@ -71,7 +90,7 @@ class ExportService {
             level: 0,
             child: pw.Text(
               title,
-              style: pw.TextStyle(
+              style: const pw.TextStyle(
                 fontSize: 22,
                 fontWeight: pw.FontWeight.bold,
                 color: PdfColors.indigo900,
@@ -86,7 +105,7 @@ class ExportService {
                 padding: const pw.EdgeInsets.only(top: 14, bottom: 6),
                 child: pw.Text(
                   trimmed.substring(2),
-                  style: pw.TextStyle(
+                  style: const pw.TextStyle(
                     fontSize: 16,
                     fontWeight: pw.FontWeight.bold,
                     color: PdfColors.indigo800,
@@ -98,7 +117,7 @@ class ExportService {
                 padding: const pw.EdgeInsets.only(top: 10, bottom: 4),
                 child: pw.Text(
                   trimmed.replaceAll(RegExp(r'#+\s*'), ''),
-                  style: pw.TextStyle(
+                  style: const pw.TextStyle(
                     fontSize: 13,
                     fontWeight: pw.FontWeight.bold,
                     color: PdfColors.indigo700,
@@ -112,7 +131,7 @@ class ExportService {
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
                     pw.Text('• ',
-                        style: pw.TextStyle(
+                        style: const pw.TextStyle(
                             fontWeight: pw.FontWeight.bold,
                             color: PdfColors.indigo)),
                     pw.Expanded(

@@ -22,7 +22,7 @@ function makeRequest(options, postData) {
 }
 
 async function runTests() {
-  console.log('🧪 Starting AccrediGo Backend API Test Suite...');
+  console.log('🧪 Starting GAHAR Backend API Test Suite...');
   
   let superAdminToken = '';
   let facilityToken = '';
@@ -37,7 +37,7 @@ async function runTests() {
       path: '/api/auth/super-admin/login',
       method: 'POST',
       headers: { 'Content-Type': 'application/json' }
-    }, { email: 'admin@accredigo.eg', password: 'SuperAdmin@2026!' });
+    }, { email: 'superadmin@gahar.gov.eg', password: 'SuperAdmin@2026!' });
     
     console.log('Super Admin Login Status:', saLoginRes.statusCode);
     if (saLoginRes.body && saLoginRes.body.token) {

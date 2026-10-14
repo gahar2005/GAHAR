@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../models/saved_document.dart';
+import '../services/api_service.dart';
 import '../services/export_service.dart';
 import '../services/storage_service.dart';
+import '../theme/app_theme.dart';
 
 class DocumentLibraryScreen extends StatefulWidget {
   const DocumentLibraryScreen({super.key});
@@ -68,26 +70,150 @@ class _DocumentLibraryScreenState extends State<DocumentLibraryScreen> {
   }
 
   Future<void> _deleteDoc(SavedDocument doc) async {
+    final messenger = ScaffoldMessenger.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete Document'),
-        content: Text('Are you sure you want to delete "${doc.title}"?'),
+        title: const Row(
+          children: [
+            Icon(Icons.delete_outline_rounded, color: AppColors.error),
+            SizedBox(width: 8),
+            Text('Move this document to Recycle Bin?'),
+          ],
+        ),
+        content: Text('Are you sure you want to move "${doc.title}" to the Recycle Bin? You can restore it later at any time.'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel')),
-          TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Delete', style: TextStyle(color: Colors.red))),
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+            icon: const Icon(Icons.delete_rounded),
+            label: const Text('Move to Recycle Bin'),
+            onPressed: () => Navigator.pop(context, true),
+          ),
         ],
       ),
     );
 
     if (confirmed == true) {
-      await StorageService.deleteDocument(doc.id);
+      await StorageService.softDeleteDocument(doc.id);
+      try {
+        await ApiService.deleteDocument(doc.id);
+      } catch (_) {}
+      if (mounted) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('Moved "${doc.title}" to Recycle Bin.'),
+            backgroundColor: AppColors.primary,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
       _loadDocuments();
     }
+  }
+
+  void _editDoc(SavedDocument doc) {
+    final titleController = TextEditingController(text: doc.title);
+    final contentController = TextEditingController(text: doc.content);
+    String currentStatus = doc.status;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDlgState) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.edit_rounded, color: AppColors.primary),
+              SizedBox(width: 8),
+              Text('Edit Document'),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: titleController,
+                  decoration: const InputDecoration(labelText: 'Document Title'),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  value: currentStatus,
+                  decoration: const InputDecoration(labelText: 'Status'),
+                  items: const [
+                    DropdownMenuItem(value: 'Draft', child: Text('Draft')),
+                    DropdownMenuItem(value: 'Under Review', child: Text('Under Review')),
+                    DropdownMenuItem(value: 'Approved', child: Text('Approved')),
+                  ],
+                  onChanged: (v) => setDlgState(() => currentStatus = v ?? currentStatus),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: contentController,
+                  maxLines: 8,
+                  decoration: const InputDecoration(
+                    labelText: 'Content',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final updatedDoc = SavedDocument(
+                  id: doc.id,
+                  facilityId: doc.facilityId,
+                  title: titleController.text.trim().isEmpty ? doc.title : titleController.text.trim(),
+                  content: contentController.text,
+                  docType: doc.docType,
+                  standard: doc.standard,
+                  department: doc.department,
+                  version: doc.version,
+                  status: currentStatus,
+                  author: doc.author,
+                  reviewedBy: doc.reviewedBy,
+                  approvedBy: doc.approvedBy,
+                  createdAt: doc.createdAt,
+                  lastModified: DateTime.now(),
+                  isFavorite: doc.isFavorite,
+                  versionHistory: [
+                    ...doc.versionHistory,
+                    DocumentVersionHistory(
+                      version: doc.version,
+                      content: doc.content,
+                      modifiedBy: 'User',
+                      modifiedAt: DateTime.now(),
+                      changeNotes: 'Edited in Document Library',
+                    ),
+                  ],
+                );
+                final nav = Navigator.of(ctx);
+                final messenger2 = ScaffoldMessenger.of(context);
+                await StorageService.saveDocument(updatedDoc);
+                if (mounted) {
+                  nav.pop();
+                  _loadDocuments();
+                  messenger2.showSnackBar(
+                    SnackBar(content: Text('Updated "${updatedDoc.title}"')),
+                  );
+                }
+              },
+              child: const Text('Save Changes'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _viewDocumentDetail(SavedDocument doc) {
@@ -335,11 +461,23 @@ class _DocumentLibraryScreenState extends State<DocumentLibraryScreen> {
                                           : Icons.star_outline_rounded,
                                       color: Colors.amber,
                                     ),
+                                    tooltip: 'Favorite',
                                     onPressed: () => _toggleFavorite(doc),
                                   ),
                                   IconButton(
+                                    icon: const Icon(Icons.visibility_outlined, size: 20),
+                                    tooltip: 'Open',
+                                    onPressed: () => _viewDocumentDetail(doc),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.edit_outlined, size: 20),
+                                    tooltip: 'Edit',
+                                    onPressed: () => _editDoc(doc),
+                                  ),
+                                  IconButton(
                                     icon: const Icon(Icons.delete_outline_rounded,
-                                        size: 20),
+                                        color: AppColors.error, size: 20),
+                                    tooltip: 'Move to Recycle Bin',
                                     onPressed: () => _deleteDoc(doc),
                                   ),
                                 ],

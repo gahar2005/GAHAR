@@ -4,6 +4,7 @@ import '../../models/platform_models.dart';
 import '../../services/api_service.dart';
 import '../../services/storage_service.dart';
 import '../../theme/app_theme.dart';
+import '../../main.dart';
 
 class FacilityRegistrationScreen extends StatefulWidget {
   final VoidCallback onSuccess;
@@ -17,7 +18,6 @@ class FacilityRegistrationScreen extends StatefulWidget {
 class _FacilityRegistrationScreenState extends State<FacilityRegistrationScreen> {
   int _currentStep = 0;
   final _nameController = TextEditingController();
-  final _governorateController = TextEditingController(text: 'Cairo');
   final _bedsController = TextEditingController(text: '120');
   final _adminNameController = TextEditingController();
   final _emailController = TextEditingController();
@@ -31,12 +31,237 @@ class _FacilityRegistrationScreenState extends State<FacilityRegistrationScreen>
   bool _loading = false;
   String? _errorMessage;
 
+  // Egyptian Governorates & Cities
+  String _selectedGovernorate = 'Cairo';
+  final _cityController = TextEditingController(text: 'New Cairo');
+
+  final Map<String, List<String>> _governorateCities = {
+    'Cairo': [
+      'New Cairo',
+      'Nasr City',
+      'Heliopolis',
+      'Maadi',
+      'Downtown',
+      'Zamalek',
+      'Shubra',
+      'Helwan',
+      'El Shorouk',
+      'Badr City',
+      '15th of May',
+      'New Administrative Capital',
+    ],
+    'Giza': [
+      'Dokki',
+      'Mohandessin',
+      '6th of October',
+      'Sheikh Zayed',
+      'Haram',
+      'Faisal',
+      'Agouza',
+      'Imbaba',
+      'Hawamdia',
+    ],
+    'Alexandria': [
+      'Smouha',
+      'Sidi Gaber',
+      'Miami',
+      'Montaza',
+      'Sporting',
+      'Gleem',
+      'Mansheya',
+      'Borg El Arab',
+      'Agami',
+    ],
+    'Port Said': [
+      'Port Fouad',
+      'Al Sharq',
+      'Al Dawahy',
+      'Al Arab',
+      'Al Zohour',
+      'Al Manakh',
+    ],
+    'Suez': [
+      'Faisal',
+      'Al Arbaeen',
+      'Al Ganayen',
+      'Ataqah',
+      'Al Suweis',
+    ],
+    'Ismailia': [
+      'Ismailia City',
+      'Fayed',
+      'El Qantara',
+      'Tell El Kebir',
+      'Abu Suwir',
+    ],
+    'Qalyubia': [
+      'Banha',
+      'Qalyub',
+      'Shubra El Kheima',
+      'Khanka',
+      'Tokh',
+      'Qaha',
+      'El Obour',
+    ],
+    'Sharkia': [
+      'Zagazig',
+      '10th of Ramadan',
+      'Belbeis',
+      'Minya El Qamh',
+      'Faqous',
+      'Abu Hammad',
+    ],
+    'Gharbia': [
+      'Tanta',
+      'El Mahalla El Kubra',
+      'Kafr El Zayat',
+      'Zifta',
+      'Samanoud',
+    ],
+    'Menoufia': [
+      'Shibin El Kom',
+      'Menouf',
+      'Ashmoun',
+      'Sadat City',
+      'Quesna',
+      'Berket El Sabaa',
+    ],
+    'Dakahlia': [
+      'Mansoura',
+      'Talkha',
+      'Mit Ghamr',
+      'Dikirnis',
+      'Belqas',
+      'Sinbillawin',
+    ],
+    'Kafr El Sheikh': [
+      'Kafr El Sheikh City',
+      'Desouk',
+      'Baltim',
+      'Fowa',
+      'Metobas',
+    ],
+    'Damietta': [
+      'Damietta City',
+      'New Damietta',
+      'Ras El Bar',
+      'Fareskour',
+      'Kafr Saad',
+    ],
+    'Beheira': [
+      'Damanhur',
+      'Kafr El Dawwar',
+      'Rashid',
+      'Kom Hamada',
+      'Edko',
+      'Abu Hummus',
+    ],
+    'Matrouh': [
+      'Marsa Matrouh',
+      'El Alamein',
+      'Siwa',
+      'Dabaa',
+      'Salloum',
+    ],
+    'North Sinai': [
+      'Arish',
+      'Sheikh Zuweid',
+      'Rafah',
+      'Bir al-Abed',
+    ],
+    'South Sinai': [
+      'Sharm El Sheikh',
+      'Dahab',
+      'Nuweiba',
+      'Ras Sedr',
+      'Saint Catherine',
+      'Tor Sinai',
+    ],
+    'Fayoum': [
+      'Fayoum City',
+      'Senuris',
+      'Itsa',
+      'Tamiya',
+      'Youssef El Seddik',
+    ],
+    'Beni Suef': [
+      'Beni Suef City',
+      'Nasser',
+      'Biba',
+      'El Wasta',
+      'Samasta',
+      'Ihnasya',
+    ],
+    'Minya': [
+      'Minya City',
+      'Mallawi',
+      'Maghagha',
+      'Beni Mazar',
+      'Samalut',
+      'Abu Qurqas',
+    ],
+    'Asyut': [
+      'Asyut City',
+      'Dairut',
+      'Manfalut',
+      'Qusiya',
+      'Abnub',
+      'El Badari',
+    ],
+    'Sohag': [
+      'Sohag City',
+      'Akhmim',
+      'Girga',
+      'Tahta',
+      'Maragha',
+      'Balyana',
+    ],
+    'Qena': [
+      'Qena City',
+      'Nag Hammadi',
+      'Qus',
+      'Dishna',
+      'Farshut',
+      'Abu Tesht',
+    ],
+    'Luxor': [
+      'Luxor City',
+      'Esna',
+      'Armant',
+      'El Bayadiya',
+      'El Tod',
+      'El Qurna',
+    ],
+    'Aswan': [
+      'Aswan City',
+      'Edfu',
+      'Kom Ombo',
+      'Daraw',
+      'Nasr El Nuba',
+    ],
+    'Red Sea': [
+      'Hurghada',
+      'El Gouna',
+      'Safaga',
+      'Marsa Alam',
+      'Quseir',
+      'Ras Ghareb',
+    ],
+    'New Valley': [
+      'Kharga',
+      'Dakhla',
+      'Farafra',
+      'Paris',
+      'Balat',
+    ],
+  };
+
   final List<Map<String, String>> _facilityTypes = [
-    {'value': 'Hospital', 'label': 'Hospital / مستشفى عام'},
-    {'value': 'Specialized Hospital', 'label': 'Specialized Hospital / مستشفى تخصصي'},
-    {'value': 'Primary Healthcare Unit', 'label': 'Primary Care Unit / وحدة رعاية أولية'},
-    {'value': 'Radiology Center', 'label': 'Radiology Center / مركز أشعة'},
-    {'value': 'Medical Laboratory', 'label': 'Medical Laboratory / معمل تحاليل'},
+    {'value': 'Hospital', 'label': 'General Hospital'},
+    {'value': 'Specialized Hospital', 'label': 'Specialized Hospital'},
+    {'value': 'Primary Healthcare Unit', 'label': 'Primary Healthcare Unit'},
+    {'value': 'Radiology Center', 'label': 'Radiology Center'},
+    {'value': 'Medical Laboratory', 'label': 'Medical Laboratory'},
   ];
 
   final List<Map<String, String>> _plans = [
@@ -51,10 +276,24 @@ class _FacilityRegistrationScreenState extends State<FacilityRegistrationScreen>
     'Online Gateway',
   ];
 
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _bedsController.dispose();
+    _adminNameController.dispose();
+    _emailController.dispose();
+    _phoneController.dispose();
+    _passwordController.dispose();
+    _paymentRefController.dispose();
+    _cityController.dispose();
+    super.dispose();
+  }
+
   Future<void> _submitRegistration() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
     final name = _nameController.text.trim();
+    final city = _cityController.text.trim();
 
     if (name.isEmpty || email.isEmpty || password.isEmpty) {
       setState(() => _errorMessage = 'Please complete all required fields.');
@@ -66,10 +305,13 @@ class _FacilityRegistrationScreenState extends State<FacilityRegistrationScreen>
       _errorMessage = null;
     });
 
+    final locationString = city.isNotEmpty ? '$_selectedGovernorate - $city' : _selectedGovernorate;
+
     final payload = {
       'facilityName': name,
       'facilityType': _facilityType,
-      'governorate': _governorateController.text.trim(),
+      'governorate': locationString,
+      'city': city,
       'bedCapacity': _bedsController.text.trim(),
       'contactPerson': _adminNameController.text.trim(),
       'workEmail': email,
@@ -98,7 +340,7 @@ class _FacilityRegistrationScreenState extends State<FacilityRegistrationScreen>
       final hospitalProfile = HospitalProfile(
         name: name,
         type: _facilityType,
-        capacity: '${_bedsController.text} beds',
+        capacity: '${_bedsController.text} beds ($locationString)',
         departments: const ['Emergency', 'ICU', 'Surgery', 'Quality Committee'],
         owner: _adminNameController.text.trim(),
       );
@@ -115,6 +357,15 @@ class _FacilityRegistrationScreenState extends State<FacilityRegistrationScreen>
           ),
         );
         widget.onSuccess();
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(
+            builder: (ctx) => MainNavigationShell(
+              onThemeToggle: () => MyApp.of(ctx)?.toggleTheme(),
+              isDark: MyApp.of(ctx)?.isDark ?? true,
+            ),
+          ),
+          (route) => false,
+        );
       }
     } else {
       setState(() => _errorMessage = response['message'] ?? 'Registration failed.');
@@ -128,10 +379,12 @@ class _FacilityRegistrationScreenState extends State<FacilityRegistrationScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppColors.bgDark,
       appBar: AppBar(
         title: const Text('Register Healthcare Facility'),
-        backgroundColor: AppColors.primary,
+        backgroundColor: AppColors.surfaceDark,
         foregroundColor: Colors.white,
+        elevation: 0,
       ),
       body: Stepper(
         currentStep: _currentStep,
@@ -149,7 +402,7 @@ class _FacilityRegistrationScreenState extends State<FacilityRegistrationScreen>
         },
         controlsBuilder: (context, details) {
           return Padding(
-            padding: const EdgeInsets.only(top: 20),
+            padding: const EdgeInsets.only(top: 24),
             child: Row(
               children: [
                 ElevatedButton(
@@ -157,6 +410,7 @@ class _FacilityRegistrationScreenState extends State<FacilityRegistrationScreen>
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
                   ),
                   child: _loading
                       ? const SizedBox(
@@ -170,9 +424,13 @@ class _FacilityRegistrationScreenState extends State<FacilityRegistrationScreen>
                       : Text(_currentStep == 2 ? 'Submit Registration' : 'Next Step'),
                 ),
                 if (_currentStep > 0) ...[
-                  const SizedBox(width: 12),
-                  TextButton(
+                  const SizedBox(width: 14),
+                  OutlinedButton(
                     onPressed: details.onStepCancel,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.white70,
+                      side: const BorderSide(color: AppColors.borderDark),
+                    ),
                     child: const Text('Back'),
                   ),
                 ],
@@ -184,21 +442,27 @@ class _FacilityRegistrationScreenState extends State<FacilityRegistrationScreen>
           // Step 1: Facility Profile
           Step(
             title: const Text('Facility Profile'),
-            subtitle: const Text('Name, Type & Capacity'),
+            subtitle: const Text('Name, Location & Capacity'),
             isActive: _currentStep >= 0,
             content: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 if (_errorMessage != null)
                   Container(
-                    padding: const EdgeInsets.all(10),
-                    margin: const EdgeInsets.only(bottom: 12),
-                    color: AppColors.error.withOpacity(0.1),
-                    child: Text(_errorMessage!, style: const TextStyle(color: AppColors.error, fontSize: 12)),
+                    padding: const EdgeInsets.all(12),
+                    margin: const EdgeInsets.only(bottom: 14),
+                    decoration: BoxDecoration(
+                      color: AppColors.error.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.error.withValues(alpha: 0.5)),
+                    ),
+                    child: Text(_errorMessage!, style: const TextStyle(color: Color(0xFFFCA5A5), fontSize: 13)),
                   ),
                 TextField(
                   controller: _nameController,
                   decoration: const InputDecoration(
-                    labelText: 'Facility Name / اسم المنشأة الطبية',
+                    labelText: 'Facility Name',
+                    hintText: 'e.g. Cairo Specialized Hospital',
                     prefixIcon: Icon(Icons.local_hospital_outlined),
                   ),
                 ),
@@ -206,38 +470,96 @@ class _FacilityRegistrationScreenState extends State<FacilityRegistrationScreen>
                 DropdownButtonFormField<String>(
                   initialValue: _facilityType,
                   decoration: const InputDecoration(
-                    labelText: 'Facility Type / نوع المنشأة',
+                    labelText: 'Facility Type',
                     prefixIcon: Icon(Icons.category_outlined),
                   ),
+                  icon: const Icon(Icons.arrow_drop_down_rounded, size: 28),
                   items: _facilityTypes.map((t) {
                     return DropdownMenuItem(value: t['value'], child: Text(t['label']!));
                   }).toList(),
                   onChanged: (v) => setState(() => _facilityType = v!),
                 ),
                 const SizedBox(height: 14),
+                // Location Row: Governorate & City
                 Row(
                   children: [
+                    // Governorate Dropdown with Arrow
                     Expanded(
-                      child: TextField(
-                        controller: _governorateController,
+                      flex: 1,
+                      child: DropdownButtonFormField<String>(
+                        value: _selectedGovernorate,
                         decoration: const InputDecoration(
-                          labelText: 'Governorate / المحافظة',
+                          labelText: 'Governorate',
                           prefixIcon: Icon(Icons.location_city_outlined),
                         ),
+                        icon: const Icon(Icons.arrow_drop_down_rounded, size: 28),
+                        isExpanded: true,
+                        items: _governorateCities.keys.map((gov) {
+                          return DropdownMenuItem(
+                            value: gov,
+                            child: Text(gov, overflow: TextOverflow.ellipsis),
+                          );
+                        }).toList(),
+                        onChanged: (val) {
+                          if (val != null) {
+                            setState(() {
+                              _selectedGovernorate = val;
+                              final cities = _governorateCities[val] ?? ['Central District'];
+                              _cityController.text = cities.first;
+                            });
+                          }
+                        },
                       ),
                     ),
                     const SizedBox(width: 12),
+                    // City / District with Dropdown Arrow Selector
                     Expanded(
+                      flex: 1,
                       child: TextField(
-                        controller: _bedsController,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: 'Bed Capacity / الأسرة',
-                          prefixIcon: Icon(Icons.bed_outlined),
+                        controller: _cityController,
+                        decoration: InputDecoration(
+                          labelText: 'City / District',
+                          hintText: 'Type or pick city',
+                          prefixIcon: const Icon(Icons.apartment_outlined),
+                          suffixIcon: PopupMenuButton<String>(
+                            tooltip: 'Select City in $_selectedGovernorate',
+                            icon: const Icon(Icons.arrow_drop_down_rounded, size: 28, color: AppColors.primaryLight),
+                            onSelected: (city) {
+                              setState(() {
+                                _cityController.text = city;
+                              });
+                            },
+                            itemBuilder: (context) {
+                              final cities = _governorateCities[_selectedGovernorate] ?? ['Central District'];
+                              return cities.map((c) {
+                                return PopupMenuItem<String>(
+                                  value: c,
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.location_on_outlined, size: 18, color: AppColors.primaryLight),
+                                      const SizedBox(width: 8),
+                                      Text(c),
+                                    ],
+                                  ),
+                                );
+                              }).toList();
+                            },
+                          ),
                         ),
                       ),
                     ),
                   ],
+                ),
+                const SizedBox(height: 14),
+                // Bed Capacity
+                TextField(
+                  controller: _bedsController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Bed Capacity',
+                    hintText: 'Number of inpatient beds',
+                    prefixIcon: Icon(Icons.bed_outlined),
+                  ),
                 ),
               ],
             ),
@@ -253,7 +575,7 @@ class _FacilityRegistrationScreenState extends State<FacilityRegistrationScreen>
                 TextField(
                   controller: _adminNameController,
                   decoration: const InputDecoration(
-                    labelText: 'Administrator Name / اسم المسؤول',
+                    labelText: 'Administrator Full Name',
                     prefixIcon: Icon(Icons.person_outline),
                   ),
                 ),
@@ -262,7 +584,7 @@ class _FacilityRegistrationScreenState extends State<FacilityRegistrationScreen>
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
                   decoration: const InputDecoration(
-                    labelText: 'Work Email / البريد الرسمي',
+                    labelText: 'Work Email Address',
                     prefixIcon: Icon(Icons.email_outlined),
                   ),
                 ),
@@ -271,7 +593,7 @@ class _FacilityRegistrationScreenState extends State<FacilityRegistrationScreen>
                   controller: _phoneController,
                   keyboardType: TextInputType.phone,
                   decoration: const InputDecoration(
-                    labelText: 'Phone Number / رقم الهاتف',
+                    labelText: 'Phone Number',
                     prefixIcon: Icon(Icons.phone_outlined),
                   ),
                 ),
@@ -280,7 +602,7 @@ class _FacilityRegistrationScreenState extends State<FacilityRegistrationScreen>
                   controller: _passwordController,
                   obscureText: true,
                   decoration: const InputDecoration(
-                    labelText: 'Password / كلمة المرور',
+                    labelText: 'Password',
                     prefixIcon: Icon(Icons.lock_outline),
                   ),
                 ),
@@ -299,9 +621,10 @@ class _FacilityRegistrationScreenState extends State<FacilityRegistrationScreen>
                 DropdownButtonFormField<String>(
                   initialValue: _selectedPlan,
                   decoration: const InputDecoration(
-                    labelText: 'Subscription Plan / خطة الاشتراك',
+                    labelText: 'Subscription Plan',
                     prefixIcon: Icon(Icons.card_membership_outlined),
                   ),
+                  icon: const Icon(Icons.arrow_drop_down_rounded, size: 28),
                   items: _plans.map((p) {
                     return DropdownMenuItem(value: p['value'], child: Text(p['label']!));
                   }).toList(),
@@ -311,9 +634,10 @@ class _FacilityRegistrationScreenState extends State<FacilityRegistrationScreen>
                 DropdownButtonFormField<String>(
                   initialValue: _selectedPaymentMethod,
                   decoration: const InputDecoration(
-                    labelText: 'Payment Method / طريقة الدفع',
+                    labelText: 'Payment Method',
                     prefixIcon: Icon(Icons.payment_outlined),
                   ),
+                  icon: const Icon(Icons.arrow_drop_down_rounded, size: 28),
                   items: _paymentMethods.map((pm) {
                     return DropdownMenuItem(value: pm, child: Text(pm));
                   }).toList(),
@@ -323,22 +647,22 @@ class _FacilityRegistrationScreenState extends State<FacilityRegistrationScreen>
                 TextField(
                   controller: _paymentRefController,
                   decoration: const InputDecoration(
-                    labelText: 'Transaction Reference / رقم عملية الدفع (Optional)',
+                    labelText: 'Transaction Reference (Optional)',
                     prefixIcon: Icon(Icons.receipt_long_outlined),
                   ),
                 ),
                 const SizedBox(height: 16),
                 Container(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: AppColors.info.withOpacity(0.1),
+                    color: AppColors.info.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.info),
+                    border: Border.all(color: AppColors.info.withValues(alpha: 0.5)),
                   ),
                   child: const Row(
                     children: [
                       Icon(Icons.shield_outlined, color: AppColors.info),
-                      SizedBox(width: 10),
+                      SizedBox(width: 12),
                       Expanded(
                         child: Text(
                           'Your registration request will be submitted to Super Admin for verification. Account will be activated upon review.',

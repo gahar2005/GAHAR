@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/evidence_item.dart';
 import '../services/storage_service.dart';
+import '../theme/app_theme.dart';
 
 class EvidenceTrackerScreen extends StatefulWidget {
   const EvidenceTrackerScreen({super.key});
@@ -13,7 +14,7 @@ class _EvidenceTrackerScreenState extends State<EvidenceTrackerScreen> {
   List<EvidenceItem> _items = [];
   bool _loading = true;
   String _selectedCategory = 'All';
-  String _searchQuery = '';
+  final String _searchQuery = '';
 
   final List<String> _categories = [
     'All',
@@ -155,9 +156,50 @@ class _EvidenceTrackerScreenState extends State<EvidenceTrackerScreen> {
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
-                : filtered.isEmpty
-                    ? const Center(child: Text('No evidence items match filter'))
-                    : ListView.builder(
+                : _items.isEmpty
+                    ? Center(
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.all(32),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(24),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary.withValues(alpha: 0.08),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  Icons.file_present_outlined,
+                                  size: 56,
+                                  color: AppColors.primary,
+                                ),
+                              ),
+                              const SizedBox(height: 20),
+                              const Text(
+                                'No evidence items tracked yet.',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              Text(
+                                'Upload documents, policies, audit checklists, and meeting minutes linked to specific GAHAR standards to track compliance evidence.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 13.5,
+                                  color: Colors.grey.shade600,
+                                  height: 1.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    : filtered.isEmpty
+                        ? const Center(child: Text('No evidence items match filter'))
+                        : ListView.builder(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         itemCount: filtered.length,
                         itemBuilder: (context, index) {

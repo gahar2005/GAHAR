@@ -182,9 +182,9 @@ class _CopilotSheetState extends State<_CopilotSheet> {
           // Header Bar
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               color: AppColors.primary,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
             ),
             child: Row(
               children: [
@@ -236,10 +236,10 @@ class _CopilotSheetState extends State<_CopilotSheet> {
                 return Padding(
                   padding: const EdgeInsets.only(right: 8),
                   child: ActionChip(
-                    backgroundColor: AppColors.primary.withOpacity(0.1),
+                    backgroundColor: AppColors.primary.withValues(alpha: 0.1),
                     label: Text(
                       prompt,
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 12,
                         color: AppColors.primary,
                         fontWeight: FontWeight.w600,
@@ -281,7 +281,7 @@ class _CopilotSheetState extends State<_CopilotSheet> {
                       ),
                       border: isUser
                           ? null
-                          : Border.all(color: Colors.grey.withOpacity(0.2)),
+                          : Border.all(color: Colors.grey.withValues(alpha: 0.2)),
                     ),
                     child: Text(
                       msg['content'] ?? '',
@@ -300,8 +300,8 @@ class _CopilotSheetState extends State<_CopilotSheet> {
           ),
 
           if (_loading)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -313,8 +313,8 @@ class _CopilotSheetState extends State<_CopilotSheet> {
                       color: AppColors.primary,
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  const Text('AI Copilot is analyzing...',
+                  SizedBox(width: 10),
+                  Text('AI Copilot is analyzing...',
                       style: TextStyle(fontSize: 12, color: Colors.grey)),
                 ],
               ),
@@ -343,7 +343,7 @@ class _CopilotSheetState extends State<_CopilotSheet> {
                   ),
                 ),
                 IconButton(
-                  icon: Icon(Icons.send_rounded, color: AppColors.primary),
+                  icon: const Icon(Icons.send_rounded, color: AppColors.primary),
                   onPressed: () => _sendMessage(_inputController.text),
                 ),
               ],

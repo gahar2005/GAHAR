@@ -1,16 +1,15 @@
-import 'dart:convert';
 import 'dart:math';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_tts/flutter_tts.dart';
-import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
 
 import 'config/app_config.dart';
 import 'models/saved_document.dart';
 import 'models/platform_models.dart';
 import 'screens/compliance_dashboard_screen.dart';
+import 'screens/sat_assessment_screen.dart';
+import 'screens/sat_dashboard_screen.dart';
 import 'screens/evidence_tracker_screen.dart';
 import 'screens/library_screen.dart';
 import 'screens/applicability_screen.dart';
@@ -22,6 +21,9 @@ import 'screens/experts_hub_screen.dart';
 import 'screens/facility_settings_screen.dart';
 import 'screens/admin/super_admin_screen.dart';
 import 'screens/auth/login_screen.dart';
+import 'screens/document_generation_screen.dart';
+import 'screens/monitoring_roi_screen.dart';
+import 'screens/trash_screen.dart';
 import 'services/api_service.dart';
 import 'services/export_service.dart';
 import 'services/storage_service.dart';
@@ -32,29 +34,6 @@ void main() {
   runApp(const MyApp());
 }
 
-// ─── App Settings & Persistence ──────────────────────────────────────────────
-class AppSettings {
-  static const String _groqKeyPref = "groq_api_key";
-  static const String _groqModel = "llama-3.3-70b-versatile";
-  static const String groqEndpoint =
-      "https://api.groq.com/openai/v1/chat/completions";
-
-  static Future<String> getGroqKey() async {
-    final prefs = await SharedPreferences.getInstance();
-    final savedKey = prefs.getString(_groqKeyPref) ?? '';
-    if (savedKey.isEmpty) {
-      return '';
-    }
-    return savedKey;
-  }
-
-  static Future<void> setGroqKey(String key) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_groqKeyPref, key.trim());
-  }
-
-  static String get model => _groqModel;
-}
 
 // ─── Search Engine ────────────────────────────────────────────────────────────
 class BylawsSearchEngine {
@@ -279,6 +258,23 @@ class BylawsSearchEngine {
 
   List<SearchResult> search(String query, {int topK = 5}) {
     if (!isLoaded || query.trim().isEmpty) return [];
+
+    // Exact standard code detection (e.g. GSR.01, PCC.06, SAS.03, IPC.01)
+    final standardCodeRegex = RegExp(r'\b([A-Za-z]{2,4}[.\-]\d{2})\b');
+    final codeMatch = standardCodeRegex.firstMatch(query);
+    if (codeMatch != null) {
+      final code = codeMatch.group(1)!.toUpperCase().replaceAll('-', '.');
+      final exactMatches = <SearchResult>[];
+      for (int i = 0; i < _sections.length; i++) {
+        if (_sections[i].toUpperCase().contains(code)) {
+          exactMatches.add(SearchResult(text: _sections[i], score: 10.0, index: i));
+        }
+      }
+      if (exactMatches.isNotEmpty) {
+        return exactMatches.take(topK).toList();
+      }
+    }
+
     final queryTokens = expandQuery(query);
     if (queryTokens.isEmpty) return [];
 
@@ -600,7 +596,7 @@ class MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: "GAHAR AI Accreditation Platform",
+      title: "GAHAR",
       debugShowCheckedModeBanner: false,
       themeMode: _themeMode,
       theme: AppTheme.lightTheme,
@@ -650,34 +646,7 @@ class _SplashViewState extends State<SplashView> with SingleTickerProviderStateM
 
       Widget initialScreen;
       if (token == null || token.isEmpty) {
-        initialScreen = LoginScreen(
-          onLoginSuccess: () async {
-            final currentUser = await StorageService.getUserProfile();
-            if (!context.mounted) return;
-            if (currentUser?.role == UserRole.superAdmin) {
-              Navigator.of(context).pushReplacement(
-                MaterialPageRoute(
-                  builder: (ctx) => SuperAdminScreen(
-                    onLogout: () {
-                      Navigator.of(ctx).pushReplacement(
-                        MaterialPageRoute(builder: (_) => const SplashView()),
-                      );
-                    },
-                  ),
-                ),
-              );
-            } else {
-              Navigator.of(context).pushReplacement(
-                MaterialPageRoute(
-                  builder: (ctx) => MainNavigationShell(
-                    onThemeToggle: () => MyApp.of(ctx)?.toggleTheme(),
-                    isDark: MyApp.of(ctx)?.isDark ?? true,
-                  ),
-                ),
-              );
-            }
-          },
-        );
+        initialScreen = const LoginScreen();
       } else if (user?.role == UserRole.superAdmin) {
         initialScreen = SuperAdminScreen(
           onLogout: () {
@@ -729,7 +698,7 @@ class _SplashViewState extends State<SplashView> with SingleTickerProviderStateM
               height: 320,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: AppColors.primary.withOpacity(0.2),
+                color: AppColors.primary.withValues(alpha: 0.2),
               ),
             ),
           ),
@@ -745,34 +714,31 @@ class _SplashViewState extends State<SplashView> with SingleTickerProviderStateM
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Container(
-                          width: 96,
-                          height: 96,
+                          width: 100,
+                          height: 100,
                           decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [AppColors.primary, AppColors.primaryLight],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                            borderRadius: BorderRadius.circular(28),
+                            borderRadius: BorderRadius.circular(24),
                             boxShadow: [
                               BoxShadow(
-                                color: AppColors.primary.withOpacity(0.4),
+                                color: AppColors.primary.withValues(alpha: 0.4),
                                 blurRadius: 24,
                                 offset: const Offset(0, 8),
                               ),
                             ],
                           ),
-                          child: const Icon(
-                            Icons.health_and_safety_rounded,
-                            color: Colors.white,
-                            size: 52,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(24),
+                            child: Image.asset(
+                              'assets/logo.png',
+                              fit: BoxFit.cover,
+                            ),
                           ),
                         ),
                         const SizedBox(height: 24),
                         const Text(
-                          "GAHAR PLATFORM",
+                          "GAHAR",
                           style: TextStyle(
-                            fontSize: 24,
+                            fontSize: 32,
                             fontWeight: FontWeight.bold,
                             color: Colors.white,
                             letterSpacing: 4,
@@ -783,7 +749,7 @@ class _SplashViewState extends State<SplashView> with SingleTickerProviderStateM
                           "Healthcare Accreditation Enterprise AI",
                           style: TextStyle(
                             fontSize: 13,
-                            color: Colors.white.withOpacity(0.6),
+                            color: Colors.white.withValues(alpha: 0.6),
                             letterSpacing: 1.5,
                           ),
                         ),
@@ -822,6 +788,8 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
   Widget build(BuildContext context) {
     final screens = [
       const ComplianceDashboardScreen(),
+      const SATDashboardScreen(),
+      const SATAssessmentScreen(),
       ChatScreen(
         onThemeToggle: widget.onThemeToggle,
         isDark: widget.isDark,
@@ -829,10 +797,12 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
       const ApplicabilityScreen(),
       const GapAnalysisScreen(),
       const ActionPlansScreen(),
+      const DocumentGenerationScreen(),
       const DocumentLibraryScreen(),
       const EvidenceTrackerScreen(),
       const LicensesScreen(),
       const SurveyPrepScreen(),
+      const MonitoringRoiScreen(),
       const ExpertsHubScreen(),
       FacilitySettingsScreen(
         onLogout: () {
@@ -843,6 +813,7 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
           );
         },
       ),
+      const TrashScreen(), // index 15
     ];
 
     return Scaffold(
@@ -851,36 +822,64 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
           padding: EdgeInsets.zero,
           children: [
             DrawerHeader(
-              decoration: BoxDecoration(color: AppColors.primary),
-              child: const Column(
+              decoration: const BoxDecoration(color: AppColors.primary),
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.health_and_safety_rounded, size: 48, color: Colors.white),
-                  SizedBox(height: 10),
-                  Text(
-                    'GAHAR Platform',
-                    style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.asset(
+                      'assets/logo.png',
+                      width: 50,
+                      height: 50,
+                      fit: BoxFit.cover,
+                    ),
                   ),
-                  Text(
-                    'Accreditation Modules',
+                  const SizedBox(height: 10),
+                  const Text(
+                    'GAHAR',
+                    style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+                  ),
+                  const Text(
+                    'Healthcare Accreditation',
                     style: TextStyle(color: Colors.white70, fontSize: 12),
                   ),
                 ],
               ),
             ),
-            _buildDrawerTile(0, 'Dashboard', Icons.dashboard_rounded),
-            _buildDrawerTile(1, 'AI Assistant / Chat', Icons.smart_toy_rounded),
-            _buildDrawerTile(2, 'Requirements Applicability', Icons.rule_rounded),
-            _buildDrawerTile(3, 'Gap Analysis Engine', Icons.analytics_rounded),
-            _buildDrawerTile(4, 'Action Plan Manager', Icons.task_alt_rounded),
-            _buildDrawerTile(5, 'Document Library (v1.0)', Icons.folder_rounded),
-            _buildDrawerTile(6, 'Evidence Tracker', Icons.fact_check_rounded),
-            _buildDrawerTile(7, 'Licenses Tracker', Icons.badge_rounded),
-            _buildDrawerTile(8, 'Survey Preparation', Icons.verified_user_rounded),
-            _buildDrawerTile(9, 'Accreditation Experts Hub', Icons.people_alt_rounded),
+            _buildDrawerTile(0, 'Compliance Dashboard', Icons.dashboard_rounded),
+            _buildDrawerTile(1, 'SAT Metrics Dashboard', Icons.assessment_rounded),
+            _buildDrawerTile(3, 'AI Copilot Suite', Icons.smart_toy_rounded),
             const Divider(),
-            _buildDrawerTile(10, 'Facility Settings & Team', Icons.settings_rounded),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: Text('READINESS & SAT', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey)),
+            ),
+            _buildDrawerTile(4, 'Applicability Engine', Icons.rule_rounded),
+            _buildDrawerTile(2, 'Hospital SAT Assessment (2025)', Icons.fact_check_rounded),
+            _buildDrawerTile(5, 'Gap Analysis Engine', Icons.analytics_rounded),
+            _buildDrawerTile(6, 'Action Plan Manager', Icons.task_alt_rounded),
+            const Divider(),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: Text('DOCUMENTS & EVIDENCE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey)),
+            ),
+            _buildDrawerTile(7, 'Document Generation & Governance', Icons.auto_awesome_rounded),
+            _buildDrawerTile(8, 'Document Library', Icons.folder_rounded),
+            _buildDrawerTile(9, 'Evidence Management', Icons.inventory_2_rounded),
+            _buildDrawerTile(10, 'Licenses & Basic Requirements', Icons.badge_rounded),
+            const Divider(),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: Text('SURVEY, MONITORING & HUB', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey)),
+            ),
+            _buildDrawerTile(11, 'Survey Preparation & Mock Survey', Icons.verified_user_rounded),
+            _buildDrawerTile(12, 'Continuous Monitoring & ROI', Icons.speed_rounded),
+            _buildDrawerTile(13, 'Accreditation Experts Hub', Icons.people_alt_rounded),
+            const Divider(),
+            _buildDrawerTile(14, 'Facility Settings & Team', Icons.settings_rounded),
+            _buildDrawerTile(15, 'Recycle Bin / سلة المحذوفات', Icons.delete_sweep_rounded),
           ],
         ),
       ),
@@ -889,8 +888,15 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
         children: screens,
       ),
       bottomNavigationBar: NavigationBar(
-        selectedIndex: _currentIndex > 4 ? 0 : _currentIndex,
-        onDestinationSelected: (index) => setState(() => _currentIndex = index),
+        selectedIndex: _currentIndex == 0 ? 0 :
+                       _currentIndex == 3 ? 1 :
+                       _currentIndex == 4 ? 2 :
+                       _currentIndex == 5 ? 3 :
+                       _currentIndex == 7 ? 4 : 0,
+        onDestinationSelected: (index) {
+          final mapping = [0, 3, 4, 5, 7];
+          setState(() => _currentIndex = mapping[index]);
+        },
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.dashboard_outlined),
@@ -1016,7 +1022,7 @@ You are a Senior Healthcare Accreditation Consultant specializing in GAHAR (Gene
 Your role is to guide healthcare organizations through accreditation compliance, offering expert, authoritative, and practical advice.
 
 Use the provided GAHAR Standards Context to answer the user's question accurately.
-If the context contains relevant GAHAR Safety Requirements (GSRs), Evidence of Compliance (EOCs), or standards, cite them explicitly (e.g., GSR.01, PCC.06, SAS.03).
+If the context contains relevant GAHAR Safety Requirements (GSRs), Evidence of Compliance (EOCs), or standards, cite their official codes directly.
 Structure your response professionally using headers, bullet points, and clear explanations.
 Answer in the same language as the user's inquiry (Arabic or English).
 
@@ -1222,11 +1228,13 @@ $context
       // Call backend proxy — API key stays server-side
       final reply = await ApiService.getCopilotResponse(
         prompt: fullPrompt,
+        message: query,
         screenContext: 'AI Copilot — ${mode.name}',
         entityData: {
           'mode': mode.name,
           'docType': docType,
           'hasDocument': pastedDocument != null,
+          'query': query,
         },
       );
 
@@ -1432,9 +1440,9 @@ $context
 
     showDialog(
       context: context,
-      builder: (context) {
-        final cs = Theme.of(context).colorScheme;
-        final isDark = Theme.of(context).brightness == Brightness.dark;
+      builder: (dialogCtx) {
+        final cs = Theme.of(dialogCtx).colorScheme;
+        final isDark = Theme.of(dialogCtx).brightness == Brightness.dark;
 
         return AlertDialog(
           title: const Text('Save to Document Library'),
@@ -1463,7 +1471,7 @@ $context
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () => Navigator.pop(dialogCtx),
               child: const Text('Cancel'),
             ),
             ElevatedButton.icon(
@@ -1480,8 +1488,9 @@ $context
                   createdAt: DateTime.now(),
                 );
                 await StorageService.saveDocument(doc);
+                if (!dialogCtx.mounted) return;
+                Navigator.pop(dialogCtx);
                 if (mounted) {
-                  Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                       content: Text('Document saved to Library! 📁'),
@@ -2481,7 +2490,7 @@ $context
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  "${(relevance * 100).round()}% match",
+                  "Search relevance: ${(relevance * 100).round()}%",
                   style: TextStyle(fontSize: 11, color: isDark ? Colors.white38 : Colors.black45),
                 ),
                 const Spacer(),
@@ -2673,7 +2682,7 @@ class _AppSettingsSheetState extends State<AppSettingsSheet> {
       );
       setState(() {
         _testSuccess = true;
-        _testResult = '✅ AI Copilot connected and active!';
+        _testResult = '✅ Connected! Reply: ${reply.length > 40 ? reply.substring(0, 40) : reply}...';
         _testing = false;
       });
     } catch (e) {
@@ -2763,7 +2772,7 @@ class _AppSettingsSheetState extends State<AppSettingsSheet> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'AccrediGo AI Copilot runs through your secure enterprise backend. No API keys are stored in the app — all AI credentials are kept server-side.',
+                          'GAHAR AI Copilot runs through your secure enterprise backend. No API keys are stored in the app — all AI credentials are kept server-side.',
                           style: TextStyle(
                             fontSize: 12,
                             color: isDark ? Colors.white60 : Colors.black54,

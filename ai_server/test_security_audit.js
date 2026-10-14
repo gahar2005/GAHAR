@@ -28,7 +28,7 @@ async function runSecurityAuditTests() {
   const saLogin = await makeRequest({
     hostname: 'localhost', port: 3000, path: '/api/auth/super-admin/login', method: 'POST',
     headers: { 'Content-Type': 'application/json' }
-  }, { email: 'admin@accredigo.eg', password: 'SuperAdmin@2026!' });
+  }, { email: 'superadmin@gahar.gov.eg', password: 'SuperAdmin@2026!' });
   console.log(`[AUTH] Super Admin Login: HTTP ${saLogin.statusCode} | Token Issued: ${!!saLogin.body?.token}`);
 
   // 2. Facility A Registration

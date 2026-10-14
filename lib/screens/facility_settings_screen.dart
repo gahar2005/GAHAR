@@ -85,7 +85,7 @@ class _FacilitySettingsScreenState extends State<FacilitySettingsScreen> {
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<UserRole>(
-                value: selectedRole,
+                initialValue: selectedRole,
                 decoration: const InputDecoration(labelText: 'Role & Permissions'),
                 items: UserRole.values
                     .where((r) => r != UserRole.superAdmin)
@@ -143,10 +143,10 @@ class _FacilitySettingsScreenState extends State<FacilitySettingsScreen> {
                         padding: const EdgeInsets.all(16),
                         child: Row(
                           children: [
-                            CircleAvatar(
+                            const CircleAvatar(
                               radius: 28,
                               backgroundColor: AppColors.primary,
-                              child: const Icon(Icons.person,
+                              child: Icon(Icons.person,
                                   size: 32, color: Colors.white),
                             ),
                             const SizedBox(width: 16),
@@ -213,7 +213,7 @@ class _FacilitySettingsScreenState extends State<FacilitySettingsScreen> {
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
-                              color: AppColors.success.withOpacity(0.15),
+                              color: AppColors.success.withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: const Text('Active',

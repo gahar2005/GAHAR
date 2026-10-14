@@ -119,8 +119,8 @@ class _ExpertsHubScreenState extends State<ExpertsHubScreen> {
                       children: [
                         CircleAvatar(
                           radius: 26,
-                          backgroundColor: AppColors.primary.withOpacity(0.15),
-                          child: Icon(Icons.person, color: AppColors.primary),
+                          backgroundColor: AppColors.primary.withValues(alpha: 0.15),
+                          child: const Icon(Icons.person, color: AppColors.primary),
                         ),
                         const SizedBox(width: 14),
                         Expanded(
@@ -167,7 +167,7 @@ class _ExpertsHubScreenState extends State<ExpertsHubScreen> {
                     Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: Colors.grey.withOpacity(0.08),
+                        color: Colors.grey.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(

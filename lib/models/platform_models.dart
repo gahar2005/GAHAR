@@ -56,6 +56,30 @@ extension UserRoleExt on UserRole {
       this == UserRole.facilityOwner ||
       this == UserRole.facilityAdmin ||
       this == UserRole.qualityManager;
+
+  static UserRole fromString(dynamic value) {
+    if (value == null) return UserRole.facilityAdmin;
+    final str = value.toString().toLowerCase().replaceAll('_', '').replaceAll(' ', '');
+    for (final role in UserRole.values) {
+      if (role.name.toLowerCase() == str) {
+        return role;
+      }
+    }
+    if (str.contains('superadmin')) return UserRole.superAdmin;
+    if (str.contains('facilityowner') || str.contains('owner')) return UserRole.facilityOwner;
+    if (str.contains('facilityadmin') || str.contains('admin')) return UserRole.facilityAdmin;
+    if (str.contains('quality')) return UserRole.qualityManager;
+    if (str.contains('accreditation')) return UserRole.accreditationManager;
+    if (str.contains('doctor') || str.contains('physician')) return UserRole.doctor;
+    if (str.contains('nurse')) return UserRole.nurse;
+    if (str.contains('pharmacist')) return UserRole.pharmacist;
+    if (str.contains('infection')) return UserRole.infectionControlOfficer;
+    if (str.contains('hr')) return UserRole.hrManager;
+    if (str.contains('department')) return UserRole.departmentManager;
+    if (str.contains('auditor')) return UserRole.auditor;
+    if (str.contains('readonly')) return UserRole.readOnly;
+    return UserRole.facilityAdmin;
+  }
 }
 
 class UserProfile {
@@ -86,10 +110,7 @@ class UserProfile {
       id: json['id'] ?? '',
       email: json['email'] ?? '',
       fullName: json['fullName'] ?? '',
-      role: UserRole.values.firstWhere(
-        (r) => r.name == json['role'],
-        orElse: () => UserRole.qualityManager,
-      ),
+      role: UserRoleExt.fromString(json['role']),
       facilityId: json['facilityId'] ?? 'default_facility',
       department: json['department'],
       phone: json['phone'],

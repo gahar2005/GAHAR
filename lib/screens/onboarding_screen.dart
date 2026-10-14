@@ -134,7 +134,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   children: [
                     Expanded(
                       child: DropdownButtonFormField<String>(
-                        value: _type,
+                        initialValue: _type,
                         decoration: InputDecoration(
                           labelText: 'Facility Type',
                           filled: true,

@@ -85,7 +85,7 @@ class _GapAnalysisScreenState extends State<GapAnalysisScreen> {
                         ChoiceChip(
                           label: const Text('Critical Gaps Only'),
                           selected: _selectedFilter == 'CRITICAL',
-                          selectedColor: AppColors.error.withOpacity(0.2),
+                          selectedColor: AppColors.error.withValues(alpha: 0.2),
                           onSelected: (_) =>
                               setState(() => _selectedFilter = 'CRITICAL'),
                         ),
@@ -94,10 +94,51 @@ class _GapAnalysisScreenState extends State<GapAnalysisScreen> {
                   ),
 
                   Expanded(
-                    child: ListView.builder(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      itemCount: _filteredGaps.length,
-                      itemBuilder: (context, index) {
+                    child: _filteredGaps.isEmpty
+                        ? Center(
+                            child: SingleChildScrollView(
+                              padding: const EdgeInsets.all(32),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(24),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.primary.withValues(alpha: 0.08),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(
+                                      Icons.fact_check_outlined,
+                                      size: 56,
+                                      color: AppColors.primary,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 20),
+                                  const Text(
+                                    'No gaps generated yet.',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  Text(
+                                    'Gaps are generated deterministically when standards or evidence criteria are scored as "NOT MET" or "PARTIALLY MET" during your facility\'s Self-Assessment (SAT).',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      fontSize: 13.5,
+                                      color: Colors.grey.shade600,
+                                      height: 1.5,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
+                        : ListView.builder(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            itemCount: _filteredGaps.length,
+                            itemBuilder: (context, index) {
                         final gap = _filteredGaps[index];
 
                         return Card(
@@ -116,7 +157,7 @@ class _GapAnalysisScreenState extends State<GapAnalysisScreen> {
                                           horizontal: 8, vertical: 4),
                                       decoration: BoxDecoration(
                                         color: _getSeverityColor(gap.severity)
-                                            .withOpacity(0.15),
+                                            .withValues(alpha: 0.15),
                                         borderRadius: BorderRadius.circular(6),
                                       ),
                                       child: Text(
@@ -130,7 +171,7 @@ class _GapAnalysisScreenState extends State<GapAnalysisScreen> {
                                     ),
                                     Text(
                                       gap.standardCode,
-                                      style: TextStyle(
+                                      style: const TextStyle(
                                         fontWeight: FontWeight.bold,
                                         color: AppColors.primary,
                                       ),

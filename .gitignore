@@ -56,3 +56,20 @@ ai_server/node_modules/
 # PDF files (large binary files)
 ai_server/file.pdf
 *.pdf
+# Widget Preview related
+.widget_preview/
+.sixth/
+.vscode/
+
+# Office and raw data spreadsheets
+*.xlsx
+*.xls
+*.docx
+*.doc
+
+# OS and temporary uploads
+Thumbs.db
+Desktop.ini
+ai_server/uploads/
+*.tmp
+*.bak

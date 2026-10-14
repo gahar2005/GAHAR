@@ -40,10 +40,51 @@ class _ActionPlansScreenState extends State<ActionPlansScreen> {
         ),
         body: _loading
             ? const Center(child: CircularProgressIndicator())
-            : ListView.builder(
-                padding: const EdgeInsets.all(16),
-                itemCount: _plans.length,
-                itemBuilder: (context, index) {
+            : _plans.isEmpty
+                ? Center(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(32),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(24),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary.withValues(alpha: 0.08),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.assignment_outlined,
+                              size: 56,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                          const Text(
+                            'No action plans generated yet.',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            'Action plans (CAPA) are assigned to hospital departments and quality teams when compliance gaps are identified during your GAHAR assessment.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 13.5,
+                              color: Colors.grey.shade600,
+                              height: 1.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: _plans.length,
+                    itemBuilder: (context, index) {
                   final plan = _plans[index];
                   return Card(
                     margin: const EdgeInsets.only(bottom: 14),
@@ -68,7 +109,7 @@ class _ActionPlansScreenState extends State<ActionPlansScreen> {
                               ),
                               Text(
                                 '${(plan.progress * 100).toInt()}% Done',
-                                style: TextStyle(
+                                style: const TextStyle(
                                   fontWeight: FontWeight.bold,
                                   color: AppColors.primary,
                                 ),

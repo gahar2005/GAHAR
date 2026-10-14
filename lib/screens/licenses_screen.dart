@@ -53,10 +53,51 @@ class _LicensesScreenState extends State<LicensesScreen> {
         ),
         body: _loading
             ? const Center(child: CircularProgressIndicator())
-            : ListView.builder(
-                padding: const EdgeInsets.all(16),
-                itemCount: _licenses.length,
-                itemBuilder: (context, index) {
+            : _licenses.isEmpty
+                ? Center(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(32),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(24),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary.withValues(alpha: 0.08),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.verified_user_outlined,
+                              size: 56,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                          const Text(
+                            'No licenses registered yet.',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            'Facility licenses (MOH operating permit, Civil Defense fire safety, radiation licenses, etc.) must be tracked with validity and expiration dates as GAHAR prerequisites.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 13.5,
+                              color: Colors.grey.shade600,
+                              height: 1.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: _licenses.length,
+                    itemBuilder: (context, index) {
                   final lic = _licenses[index];
                   final statusColor = _getStatusColor(lic.status);
 
@@ -74,7 +115,7 @@ class _LicensesScreenState extends State<LicensesScreen> {
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 8, vertical: 4),
                                 decoration: BoxDecoration(
-                                  color: statusColor.withOpacity(0.15),
+                                  color: statusColor.withValues(alpha: 0.15),
                                   borderRadius: BorderRadius.circular(6),
                                 ),
                                 child: Text(

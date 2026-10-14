@@ -87,6 +87,7 @@ class _ComplianceDashboardScreenState
                   onPressed: () async {
                     await StorageService.updateComplianceScore(
                         chapter.chapterCode, currentVal);
+                    if (!context.mounted) return;
                     Navigator.pop(context);
                     _loadScores();
                   },
@@ -124,99 +125,137 @@ class _ComplianceDashboardScreenState
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   // Overall Hospital Score Card
-                  Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [cs.primary, const Color(0xFF03DAC6)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(24),
-                      boxShadow: [
-                        BoxShadow(
-                          color: cs.primary.withValues(alpha: 0.3),
-                          blurRadius: 16,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      children: [
-                        const Text(
-                          'OVERALL HOSPITAL READINESS SCORE',
-                          style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 1.2,
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        Text(
-                          '${overall.round()}%',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 48,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 4),
+                  _scores.isEmpty
+                      ? Container(
+                          padding: const EdgeInsets.all(24),
                           decoration: BoxDecoration(
-                            color: Colors.white24,
-                            borderRadius: BorderRadius.circular(12),
+                            color: isDark ? const Color(0xFF1E1E2E) : Colors.grey.shade100,
+                            borderRadius: BorderRadius.circular(24),
+                            border: Border.all(
+                              color: isDark ? Colors.white12 : Colors.grey.shade300,
+                            ),
                           ),
-                          child: Text(
-                            overall >= 80
-                                ? '✓ High Accreditation Readiness'
-                                : (overall >= 60
-                                    ? '⚠️ Moderate Readiness – Gaps Identified'
-                                    : '🚨 High Risk – Immediate CAPA Required'),
-                            style: const TextStyle(
-                                color: Colors.white, fontSize: 11.5),
+                          child: Column(
+                            children: [
+                              const Icon(
+                                Icons.analytics_outlined,
+                                size: 48,
+                                color: Colors.grey,
+                              ),
+                              const SizedBox(height: 12),
+                              const Text(
+                                'No assessment data available',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                'No compliance score available yet. Start your facility\'s Self-Assessment (SAT) to calculate real, deterministic compliance metrics.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: Colors.grey.shade600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      : Container(
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [cs.primary, const Color(0xFF03DAC6)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            borderRadius: BorderRadius.circular(24),
+                            boxShadow: [
+                              BoxShadow(
+                                color: cs.primary.withValues(alpha: 0.3),
+                                blurRadius: 16,
+                                offset: const Offset(0, 8),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            children: [
+                              const Text(
+                                'OVERALL HOSPITAL READINESS SCORE',
+                                style: TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 1.2,
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              Text(
+                                '${overall.round()}%',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 48,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.white24,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  overall >= 80
+                                      ? '✓ High Accreditation Readiness'
+                                      : (overall >= 60
+                                          ? '⚠️ Moderate Readiness – Gaps Identified'
+                                          : '🚨 High Risk – Immediate CAPA Required'),
+                                  style: const TextStyle(
+                                      color: Colors.white, fontSize: 11.5),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                  const SizedBox(height: 24),
+                  if (_scores.isNotEmpty) ...[
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'GAHAR Chapters Readiness Breakdown:',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? Colors.white.withValues(alpha: 0.8) : Colors.black87,
+                          ),
+                        ),
+                        Text(
+                          'Tap to assess',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: isDark ? Colors.white38 : Colors.black45,
                           ),
                         ),
                       ],
                     ),
-                  ),
-                  const SizedBox(height: 24),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'GAHAR Chapters Readiness Breakdown:',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: isDark ? Colors.white.withValues(alpha: 0.8) : Colors.black87,
-                        ),
+                    const SizedBox(height: 12),
+                    // Chapters Grid
+                    GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 2,
+                        crossAxisSpacing: 12,
+                        mainAxisSpacing: 12,
+                        childAspectRatio: 1.2,
                       ),
-                      Text(
-                        'Tap to assess',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: isDark ? Colors.white38 : Colors.black45,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  // Chapters Grid
-                  GridView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      crossAxisSpacing: 12,
-                      mainAxisSpacing: 12,
-                      childAspectRatio: 1.2,
-                    ),
-                    itemCount: _scores.length,
-                    itemBuilder: (context, index) {
+                      itemCount: _scores.length,
+                      itemBuilder: (context, index) {
                       final chapter = _scores[index];
                       final scoreColor = _getScoreColor(chapter.score);
 
@@ -299,8 +338,9 @@ class _ComplianceDashboardScreenState
                     },
                   ),
                 ],
-              ),
+              ],
             ),
+          ),
     );
   }
 }

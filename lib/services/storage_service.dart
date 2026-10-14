@@ -31,23 +31,33 @@ class StorageService {
   // ─── Authentication & User Session (Secure Storage with web fallback) ───────
   static Future<String?> getAuthToken() async {
     try {
-      if (kIsWeb) {
-        final prefs = await SharedPreferences.getInstance();
-        return prefs.getString(_tokenKey);
+      if (!kIsWeb && _secureStorage != null) {
+        final val = await _secureStorage!.read(key: _tokenKey);
+        if (val != null && val.isNotEmpty) return val;
       }
-      return await _secureStorage!.read(key: _tokenKey);
+    } catch (_) {}
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString(_tokenKey);
     } catch (_) {
       return null;
     }
   }
 
-  static Future<void> saveAuthToken(String token) async {
-    if (kIsWeb) {
+  static Future<bool> saveAuthToken(String token) async {
+    bool saved = false;
+    try {
+      if (!kIsWeb && _secureStorage != null) {
+        await _secureStorage!.write(key: _tokenKey, value: token);
+        saved = true;
+      }
+    } catch (_) {}
+    try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_tokenKey, token);
-    } else {
-      await _secureStorage!.write(key: _tokenKey, value: token);
-    }
+      saved = true;
+    } catch (_) {}
+    return saved;
   }
 
   static Future<UserProfile?> getUserProfile() async {
@@ -67,14 +77,16 @@ class StorageService {
   }
 
   static Future<void> clearSession() async {
-    if (kIsWeb) {
+    try {
+      if (!kIsWeb && _secureStorage != null) {
+        await _secureStorage!.delete(key: _tokenKey);
+      }
+    } catch (_) {}
+    try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_tokenKey);
-    } else {
-      await _secureStorage!.delete(key: _tokenKey);
-    }
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_userKey);
+      await prefs.remove(_userKey);
+    } catch (_) {}
   }
 
   // ─── Hospital Profile ───────────────────────────────────────────────────────
@@ -118,11 +130,74 @@ class StorageService {
   }
 
   static Future<void> deleteDocument(String id) async {
+    await softDeleteDocument(id);
+  }
+
+  static const String _trashedDocsKey = 'gahar_trashed_documents';
+
+  /// Soft deletes a document and moves it into the local Recycle Bin
+  static Future<void> softDeleteDocument(String id, {String? deletedBy}) async {
     final docs = await getSavedDocuments();
-    docs.removeWhere((d) => d.id == id);
+    final idx = docs.indexWhere((d) => d.id == id);
+    if (idx != -1) {
+      final doc = docs.removeAt(idx);
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList(_docsKey, docs.map((d) => jsonEncode(d.toJson())).toList());
+
+      final trashed = await getTrashedDocuments();
+      trashed.removeWhere((t) => t['id'] == id || t['item_id'] == id);
+      trashed.insert(0, {
+        'id': doc.id,
+        'item_id': doc.id,
+        'item_name': doc.title,
+        'item_type': 'document',
+        'module': 'Document Library',
+        'deleted_by': deletedBy ?? doc.author,
+        'deleted_at': DateTime.now().toIso8601String(),
+        'facility_id': doc.facilityId,
+        'status': doc.status,
+        'document_data': doc.toJson(),
+      });
+      await prefs.setStringList(_trashedDocsKey, trashed.map((t) => jsonEncode(t)).toList());
+    }
+  }
+
+  /// Retrieves all soft-deleted documents from local Recycle Bin
+  static Future<List<Map<String, dynamic>>> getTrashedDocuments() async {
     final prefs = await SharedPreferences.getInstance();
-    final rawList = docs.map((d) => jsonEncode(d.toJson())).toList();
-    await prefs.setStringList(_docsKey, rawList);
+    final rawList = prefs.getStringList(_trashedDocsKey) ?? [];
+    return rawList.map((item) => jsonDecode(item) as Map<String, dynamic>).toList();
+  }
+
+  /// Restores a soft-deleted document back to the active Document Library
+  static Future<SavedDocument?> restoreDocument(String id) async {
+    final trashed = await getTrashedDocuments();
+    final idx = trashed.indexWhere((t) => t['id'] == id || t['item_id'] == id);
+    if (idx != -1) {
+      final entry = trashed.removeAt(idx);
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList(_trashedDocsKey, trashed.map((t) => jsonEncode(t)).toList());
+      if (entry['document_data'] != null) {
+        final doc = SavedDocument.fromJson(entry['document_data'] as Map<String, dynamic>);
+        await saveDocument(doc);
+        return doc;
+      }
+    }
+    return null;
+  }
+
+  /// Permanently removes a document from the local Recycle Bin
+  static Future<void> permanentDeleteDocument(String id) async {
+    final trashed = await getTrashedDocuments();
+    trashed.removeWhere((t) => t['id'] == id || t['item_id'] == id);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_trashedDocsKey, trashed.map((t) => jsonEncode(t)).toList());
+  }
+
+  /// Empties all trashed documents in local storage
+  static Future<void> emptyTrashedDocuments() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_trashedDocsKey);
   }
 
   static Future<void> toggleFavoriteDocument(String id) async {
@@ -136,14 +211,24 @@ class StorageService {
     }
   }
 
+  static Future<void> updateDocumentStatus(String id, String status) async {
+    final docs = await getSavedDocuments();
+    final index = docs.indexWhere((d) => d.id == id);
+    if (index >= 0) {
+      docs[index].status = status;
+      docs[index].lastModified = DateTime.now();
+      final prefs = await SharedPreferences.getInstance();
+      final rawList = docs.map((d) => jsonEncode(d.toJson())).toList();
+      await prefs.setStringList(_docsKey, rawList);
+    }
+  }
+
   // ─── Evidence Items ─────────────────────────────────────────────────────────
   static Future<List<EvidenceItem>> getEvidenceItems() async {
     final prefs = await SharedPreferences.getInstance();
     final rawList = prefs.getStringList(_evidenceKey) ?? [];
     if (rawList.isEmpty) {
-      final defaults = _getDefaultEvidenceItems();
-      await saveEvidenceItems(defaults);
-      return defaults;
+      return [];
     }
     return rawList
         .map((item) =>
@@ -168,7 +253,7 @@ class StorageService {
     }
   }
 
-  static List<EvidenceItem> _getDefaultEvidenceItems() {
+  static List<EvidenceItem> getDemoEvidenceItems() {
     return [
       EvidenceItem(
           id: 'ev_01',
@@ -223,9 +308,7 @@ class StorageService {
     final prefs = await SharedPreferences.getInstance();
     final rawList = prefs.getStringList(_scoresKey) ?? [];
     if (rawList.isEmpty) {
-      final defaults = _getDefaultComplianceScores();
-      await saveComplianceScores(defaults);
-      return defaults;
+      return [];
     }
     return rawList
         .map((item) => ChapterComplianceScore.fromJson(
@@ -251,7 +334,7 @@ class StorageService {
     }
   }
 
-  static List<ChapterComplianceScore> _getDefaultComplianceScores() {
+  static List<ChapterComplianceScore> getDemoComplianceScores() {
     final now = DateTime.now();
     return [
       ChapterComplianceScore(
@@ -310,9 +393,7 @@ class StorageService {
     final prefs = await SharedPreferences.getInstance();
     final rawList = prefs.getStringList(_gapsKey) ?? [];
     if (rawList.isEmpty) {
-      final defaults = _getDefaultGaps();
-      await saveGaps(defaults);
-      return defaults;
+      return [];
     }
     return rawList.map((i) => GapItem.fromJson(jsonDecode(i))).toList();
   }
@@ -323,7 +404,7 @@ class StorageService {
     await prefs.setStringList(_gapsKey, raw);
   }
 
-  static List<GapItem> _getDefaultGaps() {
+  static List<GapItem> getDemoGaps() {
     final now = DateTime.now();
     return [
       GapItem(
@@ -359,9 +440,7 @@ class StorageService {
     final prefs = await SharedPreferences.getInstance();
     final rawList = prefs.getStringList(_actionsKey) ?? [];
     if (rawList.isEmpty) {
-      final defaults = _getDefaultActionPlans();
-      await saveActionPlans(defaults);
-      return defaults;
+      return [];
     }
     return rawList.map((i) => ActionPlanItem.fromJson(jsonDecode(i))).toList();
   }
@@ -372,7 +451,7 @@ class StorageService {
     await prefs.setStringList(_actionsKey, raw);
   }
 
-  static List<ActionPlanItem> _getDefaultActionPlans() {
+  static List<ActionPlanItem> getDemoActionPlans() {
     final now = DateTime.now();
     return [
       ActionPlanItem(
@@ -397,9 +476,7 @@ class StorageService {
     final prefs = await SharedPreferences.getInstance();
     final rawList = prefs.getStringList(_licensesKey) ?? [];
     if (rawList.isEmpty) {
-      final defaults = _getDefaultLicenses();
-      await saveLicenses(defaults);
-      return defaults;
+      return [];
     }
     return rawList.map((i) => LicenseItem.fromJson(jsonDecode(i))).toList();
   }
@@ -410,7 +487,7 @@ class StorageService {
     await prefs.setStringList(_licensesKey, raw);
   }
 
-  static List<LicenseItem> _getDefaultLicenses() {
+  static List<LicenseItem> getDemoLicenses() {
     final now = DateTime.now();
     return [
       LicenseItem(

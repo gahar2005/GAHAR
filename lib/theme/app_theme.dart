@@ -1,31 +1,32 @@
 import 'package:flutter/material.dart';
 
 class AppColors {
-  // Brand Primary & Accent
-  static const Color primary = Color(0xFF0F5257); // Deep Healthcare Teal
-  static const Color primaryLight = Color(0xFF0D9488); // Energetic Teal
-  static const Color primaryDark = Color(0xFF0B3C40);
+  // Brand Primary & Accent (GAHAR Royal Navy & Sapphire)
+  static const Color primary = Color(0xFF1D4ED8); // Royal Blue
+  static const Color primaryLight = Color(0xFF38BDF8); // Cyan Highlight
+  static const Color primaryDark = Color(0xFF0F213A); // Midnight Sapphire
   
-  static const Color secondary = Color(0xFF1E293B); // Slate Navy
+  static const Color secondary = Color(0xFF0C192E); // Deep Navy Surface
   static const Color accent = Color(0xFF2563EB); // Royal Blue
+  static const Color accentGold = Color(0xFFF59E0B); // GAHAR Gold Checkmark
 
   // Status & Badges
   static const Color success = Color(0xFF10B981); // Emerald Green
   static const Color warning = Color(0xFFF59E0B); // Amber Warning
   static const Color error = Color(0xFFEF4444); // Crimson Error
-  static const Color info = Color(0xFF3B82F6); // Info Cyan
+  static const Color info = Color(0xFF38BDF8); // Cyan / Blue Info
 
   // Backgrounds - Light Mode
-  static const Color bgLight = Color(0xFFF8FAFC);
+  static const Color bgLight = Color(0xFFF1F5F9);
   static const Color surfaceLight = Colors.white;
   static const Color cardLight = Colors.white;
-  static const Color borderLight = Color(0xFFE2E8F0);
+  static const Color borderLight = Color(0xFFCBD5E1);
 
-  // Backgrounds - Dark Mode
-  static const Color bgDark = Color(0xFF0F172A);
-  static const Color surfaceDark = Color(0xFF1E293B);
-  static const Color cardDark = Color(0xFF1E293B);
-  static const Color borderDark = Color(0xFF334155);
+  // Backgrounds - Dark Mode (Matching GAHAR Logo & Auth Screen)
+  static const Color bgDark = Color(0xFF070F1E); // Deep Midnight Sapphire
+  static const Color surfaceDark = Color(0xFF0C192E); // Sleek Deep Navy Surface
+  static const Color cardDark = Color(0xFF0D223F); // Royal Navy Card
+  static const Color borderDark = Color(0xFF1E3A5F); // Slate Navy Border
 
   // Text
   static const Color textPrimaryLight = Color(0xFF0F172A);
@@ -74,7 +75,7 @@ class AppTheme {
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
-          elevation: 0,
+          elevation: 2,
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
@@ -103,7 +104,7 @@ class AppTheme {
         ),
       ),
       chipTheme: ChipThemeData(
-        backgroundColor: const Color(0xFFF1F5F9),
+        backgroundColor: const Color(0xFFE2E8F0),
         labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
@@ -114,10 +115,10 @@ class AppTheme {
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
-      primaryColor: AppColors.primaryLight,
+      primaryColor: AppColors.primary,
       scaffoldBackgroundColor: AppColors.bgDark,
       colorScheme: const ColorScheme.dark(
-        primary: AppColors.primaryLight,
+        primary: AppColors.primary,
         secondary: AppColors.secondary,
         surface: AppColors.surfaceDark,
         error: AppColors.error,
@@ -141,14 +142,14 @@ class AppTheme {
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: AppColors.borderDark, width: 1),
+          side: const BorderSide(color: AppColors.borderDark, width: 1.2),
         ),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.primaryLight,
+          backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
-          elevation: 0,
+          elevation: 2,
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
@@ -161,7 +162,7 @@ class AppTheme {
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: AppColors.surfaceDark,
+        fillColor: const Color(0xFF07142A),
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
@@ -173,8 +174,13 @@ class AppTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.primaryLight, width: 2),
+          borderSide: const BorderSide(color: AppColors.primaryLight, width: 1.5),
         ),
+      ),
+      chipTheme: ChipThemeData(
+        backgroundColor: AppColors.surfaceDark,
+        labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.white),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
     );
   }

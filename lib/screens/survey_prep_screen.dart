@@ -172,7 +172,7 @@ class _SurveyPrepScreenState extends State<SurveyPrepScreen> {
       margin: const EdgeInsets.only(bottom: 10),
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: color.withOpacity(0.15),
+          backgroundColor: color.withValues(alpha: 0.15),
           child: Icon(icon, color: color),
         ),
         title: Text(title,
