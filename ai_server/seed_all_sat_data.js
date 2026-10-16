@@ -30,6 +30,15 @@ async function runFullSeed() {
     await client.query('ALTER TABLE sat_standards ADD COLUMN IF NOT EXISTS is_essential BOOLEAN DEFAULT false;');
     console.log('✅ schema.sql applied successfully.');
 
+    // Step 1b: Run gahar_v2_migration.sql to create v2 tables (facility_settings_requests, generated_documents, etc.)
+    const v2Path = path.join(__dirname, 'gahar_v2_migration.sql');
+    if (fs.existsSync(v2Path)) {
+      console.log('Applying gahar_v2_migration.sql...');
+      const v2Sql = fs.readFileSync(v2Path, 'utf8');
+      await client.query(v2Sql);
+      console.log('✅ gahar_v2_migration.sql applied successfully.');
+    }
+
     await client.query('BEGIN');
 
     // Step 2: Create sat_sub_evidence table

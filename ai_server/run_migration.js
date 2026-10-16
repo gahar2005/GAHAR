@@ -1,7 +1,7 @@
-const { Pool } = require('c:/code with vscode/my_app/ai_server/node_modules/pg');
+const { Pool } = require('pg');
 const fs = require('fs');
 const path = require('path');
-require('c:/code with vscode/my_app/ai_server/node_modules/dotenv').config({ path: 'c:/code with vscode/my_app/ai_server/.env' });
+require('dotenv').config();
 
 async function applyMigration() {
   console.log('🔄 Executing fix_sat_rls.sql against live Supabase database...');

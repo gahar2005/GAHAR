@@ -18,9 +18,14 @@ let isPgConnected = false;
 if (databaseUrl) {
   pool = new Pool({
     connectionString: databaseUrl,
-    ssl: isProduction ? { rejectUnauthorized: false } : (databaseUrl.includes('supabase') ? { rejectUnauthorized: false } : false),
+    ssl: isProduction
+      ? { rejectUnauthorized: false }
+      : (databaseUrl.includes('supabase') || databaseUrl.includes('render') || databaseUrl.includes('sslmode=require')
+          ? { rejectUnauthorized: false }
+          : false),
+    max: 20,
     idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 5000,
+    connectionTimeoutMillis: 10000,
   });
 
   pool.on('connect', () => {
@@ -32,12 +37,8 @@ if (databaseUrl) {
   });
 
   pool.on('error', (err) => {
-    console.error('⚠️ PostgreSQL pool connection error:', err.message);
+    console.error('⚠️ PostgreSQL pool connection error (transient, reconnecting on demand):', err.message);
     isPgConnected = false;
-    if (isProduction) {
-      console.error('❌ FATAL: Lost connection to production database. Exiting.');
-      process.exit(1);
-    }
   });
 } else {
   console.warn('⚠️ Development Mode: No DATABASE_URL provided. Using in-memory database store (memoryDb).');
@@ -51,8 +52,74 @@ async function initSchema() {
       await pool.query(sql);
       console.log('✅ Database schema verified / migrated successfully.');
     }
+    // Apply v2 migration (idempotent — all statements use IF NOT EXISTS / DO NOTHING)
+    const v2Path = path.join(__dirname, 'gahar_v2_migration.sql');
+    if (fs.existsSync(v2Path)) {
+      const v2sql = fs.readFileSync(v2Path, 'utf8');
+      await pool.query(v2sql);
+      console.log('✅ v2 migration (gahar_v2_migration.sql) applied successfully.');
+    }
+    await ensureSuperAdminProvisioned();
   } catch (err) {
     console.warn('ℹ️ Notice during schema initialization:', err.message);
+  }
+}
+
+/**
+ * Idempotent Super Admin Account Provisioning
+ * Ensures the super admin exists in database and memoryDb without resetting existing credentials on restart.
+ */
+async function ensureSuperAdminProvisioned() {
+  const adminEmail = process.env.SUPER_ADMIN_EMAIL || "superadmin@gahar.gov.eg";
+  const adminPassword = process.env.SUPER_ADMIN_PASSWORD || "SuperAdmin@2026!";
+
+  // 1. Ensure in memoryDb
+  let memUser = memoryDb.users.find(u => u.role === 'SUPER_ADMIN' || u.email.toLowerCase() === adminEmail.toLowerCase());
+  if (!memUser) {
+    memUser = {
+      id: "usr_superadmin_0001",
+      email: adminEmail,
+      password_hash: bcrypt.hashSync(adminPassword, 10),
+      full_name: "GAHAR Super Admin",
+      role: "SUPER_ADMIN",
+      facility_id: null,
+      department: "Executive",
+      phone: "+201000000000",
+      is_active: true,
+      created_at: new Date().toISOString()
+    };
+    memoryDb.users.unshift(memUser);
+  }
+
+  // 2. Ensure in PostgreSQL if connected
+  if (pool && isPgConnected) {
+    try {
+      const check = await pool.query(
+        "SELECT id, email, password_hash, role FROM users WHERE role = 'SUPER_ADMIN' OR LOWER(email) = LOWER($1) LIMIT 1",
+        [adminEmail]
+      );
+      if (check.rows.length === 0) {
+        const hash = bcrypt.hashSync(adminPassword, 10);
+        await pool.query(
+          `INSERT INTO users (id, email, password_hash, full_name, role, facility_id, is_active)
+           VALUES ($1, $2, $3, $4, $5, NULL, true)
+           ON CONFLICT (email) DO NOTHING`,
+          ['00000000-0000-0000-0000-000000000001', adminEmail, hash, 'GAHAR Super Admin', 'SUPER_ADMIN']
+        );
+        console.log('✅ Super Admin account provisioned in PostgreSQL database.');
+      } else {
+        // If placeholder hash from schema.sql is detected, update it to hashed env password once
+        if (check.rows[0].password_hash && check.rows[0].password_hash.includes('placeholder_hash')) {
+          const hash = bcrypt.hashSync(adminPassword, 10);
+          await pool.query("UPDATE users SET password_hash = $1 WHERE id = $2", [hash, check.rows[0].id]);
+          console.log('✅ Updated placeholder Super Admin hash with hashed production credentials.');
+        } else {
+          console.log('ℹ️ Super Admin account already exists in database (preserving existing credentials).');
+        }
+      }
+    } catch (err) {
+      console.warn('⚠️ Super Admin DB provisioning check notice:', err.message);
+    }
   }
 }
 
@@ -223,6 +290,7 @@ module.exports = {
   pool,
   query,
   memoryDb,
+  ensureSuperAdminProvisioned,
   get isPgConnected() {
     return isPgConnected;
   },

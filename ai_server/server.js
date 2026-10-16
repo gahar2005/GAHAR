@@ -2,26 +2,29 @@ const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const fs = require("fs");
+const path = require("path");
 const crypto = require("crypto");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const { v4: uuidv4 } = require("uuid");
 require("dotenv").config();
 
-const { query, memoryDb, isPgConnected, isProduction } = require("./db");
+const { pool, query, memoryDb, ensureSuperAdminProvisioned, isPgConnected, isProduction } = require("./db");
 const { 
+  verifySmtpConnection,
+  sendRegistrationWelcomeEmail,
   sendFacilityRegistrationNotification, 
-  sendRegistrationReceivedNotification,
-  sendPaymentVerificationNotification, 
-  sendFacilityStatusNotification,
   sendSubscriptionActivatedNotification,
-  sendSubscriptionExpirationReminder,
-  sendPasswordResetNotification
+  sendFacilityStatusNotification,
+  sendPasswordResetNotification,
+  sendPaymentVerificationNotification,
+  sendEmail
 } = require("./email_service");
 const { logAuditEvent } = require("./audit_service");
 const {
   uploadDocument,
   getDocumentBuffer,
+  getSignedDownloadUrl,
   deleteDocumentFile,
   validateFile,
   MAX_FILE_SIZE_BYTES,
@@ -53,14 +56,10 @@ const {
   getFacilityRoiAnalytics,
 } = require("./monitoring_roi_service");
 
-const { OpenAI } = require("openai");
-const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
-
-const { GoogleGenerativeAI } = require("@google/generative-ai");
-const genAI = process.env.GEMINI_API_KEY ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY) : null;
-
-const Groq = require("groq-sdk");
-const groq = process.env.GROQ_API_KEY ? new Groq({ apiKey: process.env.GROQ_API_KEY }) : null;
+const {
+  generateCopilotReply,
+  getProviderStatus,
+} = require("./ai_service");
 
 const app = express();
 app.use(helmet({
@@ -82,6 +81,8 @@ app.get("/health", (req, res) => {
     status: "ok",
     timestamp: new Date().toISOString(),
     service: "GAHAR Accreditation Platform API",
+    database: isPgConnected ? "connected" : "in-memory-fallback",
+    ai: getProviderStatus(),
   });
 });
 
@@ -181,24 +182,52 @@ app.post("/api/auth/super-admin/login", async (req, res) => {
     return res.status(400).json({ success: false, message: "Email and password are required." });
   }
 
-  const isSuperAdminEmail = email && (
-    email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase() || 
-    email.toLowerCase() === 'superadmin@gahar.gov.eg' || 
-    email.toLowerCase() === 'admin@gahar-platform.eg' ||
-    email.toLowerCase() === 'admin@accredigo.eg' ||
-    email.toLowerCase() === 'gahar2005@gmail.com' ||
-    email.toLowerCase().includes('superadmin') ||
-    email.toLowerCase().includes('gahar')
-  );
+  const normalizedEmail = email.trim().toLowerCase();
+  const allowedSuperAdminEmails = Array.from(new Set([
+    SUPER_ADMIN_EMAIL.toLowerCase(),
+    "superadmin@gahar.gov.eg",
+    "admin@gahar-platform.eg",
+    "admin@accredigo.eg"
+  ])).filter(Boolean);
 
-  const expectedSuperAdminPassword = process.env.SUPER_ADMIN_PASSWORD || (isProduction ? null : "SuperAdmin@2026!");
-  const isValidSuperAdminPassword = expectedSuperAdminPassword ? password === expectedSuperAdminPassword : false;
+  let adminUser = null;
 
-  if (isSuperAdminEmail && isValidSuperAdminPassword) {
+  // 1. Check PostgreSQL if connected
+  if (isPgConnected) {
+    try {
+      const dbRes = await query(
+        "SELECT * FROM users WHERE role = 'SUPER_ADMIN' AND LOWER(email) = $1 LIMIT 1",
+        [normalizedEmail]
+      );
+      if (dbRes && dbRes.rows.length > 0) {
+        adminUser = dbRes.rows[0];
+      }
+    } catch (err) {
+      console.warn("Notice querying Super Admin in DB:", err.message);
+    }
+  }
+
+  // 2. Check memoryDb fallback
+  if (!adminUser) {
+    adminUser = memoryDb.users.find(u => u.role === 'SUPER_ADMIN' && u.email.toLowerCase() === normalizedEmail);
+  }
+
+  let isValidPassword = false;
+
+  if (adminUser) {
+    isValidPassword = bcrypt.compareSync(password, adminUser.password_hash);
+  } else if (allowedSuperAdminEmails.includes(normalizedEmail)) {
+    // If user not yet seeded, check against environment variable
+    const expectedPassword = process.env.SUPER_ADMIN_PASSWORD || (isProduction ? null : "SuperAdmin@2026!");
+    isValidPassword = expectedPassword ? password === expectedPassword : false;
+  }
+
+  if (isValidPassword) {
+    const adminId = adminUser ? adminUser.id : "00000000-0000-0000-0000-000000000001";
     const token = jwt.sign(
       { 
-        userId: "00000000-0000-0000-0000-000000000001", 
-        email, 
+        userId: adminId, 
+        email: normalizedEmail, 
         role: "SUPER_ADMIN", 
         facilityId: null 
       },
@@ -206,22 +235,22 @@ app.post("/api/auth/super-admin/login", async (req, res) => {
       { expiresIn: "24h" }
     );
 
-    logAuditEvent({ userEmail: email, action: "SUPER_ADMIN_LOGIN", req });
+    logAuditEvent({ userEmail: normalizedEmail, action: "SUPER_ADMIN_LOGIN", req });
 
     return res.json({
       success: true,
       token,
       user: {
-        id: "00000000-0000-0000-0000-000000000001",
-        email,
-        fullName: "Platform Super Admin",
+        id: adminId,
+        email: normalizedEmail,
+        fullName: adminUser?.full_name || "Platform Super Admin",
         role: "SUPER_ADMIN",
         facilityId: null,
       }
     });
   }
 
-  logAuditEvent({ userEmail: email, action: "SUPER_ADMIN_LOGIN_FAILED", req });
+  logAuditEvent({ userEmail: normalizedEmail, action: "SUPER_ADMIN_LOGIN_FAILED", req });
   return res.status(401).json({ success: false, message: "Invalid Super Admin credentials." });
 });
 
@@ -234,21 +263,44 @@ app.post("/api/auth/login", async (req, res) => {
     return res.status(400).json({ success: false, message: "Email and password are required." });
   }
 
-  const isSuperAdminEmail = email && (
-    email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase() || 
-    email.toLowerCase() === 'superadmin@gahar.gov.eg' || 
-    email.toLowerCase() === 'admin@gahar-platform.eg' ||
-    email.toLowerCase() === 'admin@accredigo.eg'
-  );
+  const normalizedEmail = email.trim().toLowerCase();
 
-  let user = memoryDb.users.find(u => u.email.toLowerCase() === email.toLowerCase());
+  let user = null;
+  let facility = null;
 
-  if (!user && isSuperAdminEmail) {
+  // 1. Query PostgreSQL if connected
+  if (isPgConnected) {
+    try {
+      const userRes = await query("SELECT * FROM users WHERE LOWER(email) = $1 LIMIT 1", [normalizedEmail]);
+      if (userRes && userRes.rows.length > 0) {
+        user = userRes.rows[0];
+        if (user.facility_id) {
+          const facRes = await query("SELECT * FROM facilities WHERE id = $1 LIMIT 1", [user.facility_id]);
+          if (facRes && facRes.rows.length > 0) {
+            facility = facRes.rows[0];
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("Notice querying user in DB:", err.message);
+    }
+  }
+
+  // 2. Fallback to memoryDb
+  if (!user) {
+    user = memoryDb.users.find(u => u.email.toLowerCase() === normalizedEmail);
+    if (user && user.facility_id) {
+      facility = memoryDb.facilities.find(f => f.id === user.facility_id) || memoryDb.facilities[0];
+    }
+  }
+
+  // If user is Super Admin, redirect them to Super Admin portal
+  if (user && user.role === 'SUPER_ADMIN') {
     return res.status(400).json({ success: false, message: "Please use Super Admin Portal login." });
   }
 
   if (!user) {
-    logAuditEvent({ userEmail: email, action: "USER_LOGIN_FAILED_NOT_FOUND", req });
+    logAuditEvent({ userEmail: normalizedEmail, action: "USER_LOGIN_FAILED_NOT_FOUND", req });
     return res.status(401).json({ success: false, message: "Invalid email or password. Please verify your credentials or register your facility." });
   }
 
@@ -263,23 +315,19 @@ app.post("/api/auth/login", async (req, res) => {
     return res.status(401).json({ success: false, message: "Invalid email or password." });
   }
 
-  let facility = memoryDb.facilities.find(f => f.id === user.facility_id);
-  if (!facility) {
-    facility = memoryDb.facilities[0];
-  }
-
+  const facilityId = user.facility_id || facility?.id;
   const token = jwt.sign(
     { 
       userId: user.id, 
       email: user.email, 
       role: user.role, 
-      facilityId: user.facility_id 
+      facilityId 
     },
     JWT_SECRET,
     { expiresIn: "24h" }
   );
 
-  logAuditEvent({ facilityId: user.facility_id, userId: user.id, userEmail: user.email, action: "USER_LOGIN_SUCCESS", req });
+  logAuditEvent({ facilityId, userId: user.id, userEmail: user.email, action: "USER_LOGIN_SUCCESS", req });
 
   res.json({
     success: true,
@@ -289,18 +337,18 @@ app.post("/api/auth/login", async (req, res) => {
       email: user.email,
       fullName: user.full_name,
       role: user.role,
-      facilityId: user.facility_id,
+      facilityId,
     },
-    facility: {
+    facility: facility ? {
       id: facility.id,
       name: facility.name,
       status: facility.status,
       subscriptionPlan: facility.subscription_plan_id,
-    }
+    } : null
   });
 });
 
-// 3. Facility Registration (Production Safe: No false auto-activation)
+// 3. Facility Registration (Production Safe: Persisted to DB + memoryDb, non-blocking emails)
 app.post("/api/auth/register-facility", async (req, res) => {
   const {
     facilityName,
@@ -317,13 +365,18 @@ app.post("/api/auth/register-facility", async (req, res) => {
     paymentReference
   } = req.body;
 
-  console.log(`🏥 New Facility Onboarding Request: ${facilityName} (${workEmail})`);
+  if (!facilityName || !workEmail || !contactPerson) {
+    return res.status(400).json({ success: false, message: "Facility name, work email, and contact person are required." });
+  }
 
-  const facilityId = `fac_${uuidv4()}`;
-  const userId = `usr_${uuidv4()}`;
+  const normalizedEmail = workEmail.trim().toLowerCase();
+  console.log(`🏥 New Facility Onboarding Request: ${facilityName} (${normalizedEmail})`);
 
-  // Production requirement: Online Gateway without verified merchant webhook CANNOT auto-activate
+  const facilityId = uuidv4();
+  const userId = uuidv4();
   const initialStatus = paymentMethod === "Online Gateway" ? "PENDING_PAYMENT" : "PENDING_REVIEW";
+  const passwordHash = bcrypt.hashSync(password || "Hospital@2026", 10);
+  const selectedPlanId = subscriptionPlanId || "plan_standard";
 
   const newFacility = {
     id: facilityId,
@@ -333,18 +386,18 @@ app.post("/api/auth/register-facility", async (req, res) => {
     address: address || "",
     bed_capacity: parseInt(bedCapacity || "100", 10),
     contact_person: contactPerson,
-    work_email: workEmail,
-    phone: phone,
+    work_email: normalizedEmail,
+    phone: phone || "",
     gahar_version: "GAHAR 2025 v2",
     status: initialStatus,
-    subscription_plan_id: subscriptionPlanId || "plan_standard",
+    subscription_plan_id: selectedPlanId,
     created_at: new Date().toISOString()
   };
 
   const newUser = {
     id: userId,
-    email: workEmail,
-    password_hash: bcrypt.hashSync(password || "Hospital@2026", 10),
+    email: normalizedEmail,
+    password_hash: passwordHash,
     full_name: contactPerson,
     role: "FACILITY_ADMIN",
     facility_id: facilityId,
@@ -352,42 +405,79 @@ app.post("/api/auth/register-facility", async (req, res) => {
     created_at: new Date().toISOString()
   };
 
-  memoryDb.facilities.unshift(newFacility);
-  memoryDb.users.unshift(newUser);
-
+  let newPayment = null;
   if (paymentReference) {
-    memoryDb.payments.unshift({
-      id: `pay_${uuidv4()}`,
+    newPayment = {
+      id: uuidv4(),
       facility_id: facilityId,
-      plan_id: subscriptionPlanId,
-      amount: subscriptionPlanId === "plan_enterprise" ? 120000 : 45000,
-      payment_method: paymentMethod,
+      plan_id: selectedPlanId,
+      amount: selectedPlanId === "plan_enterprise" ? 120000 : 45000,
+      payment_method: paymentMethod || "Bank Transfer",
       status: "PENDING_VERIFICATION",
       transaction_ref: paymentReference,
       created_at: new Date().toISOString()
-    });
+    };
   }
 
-  // Automated notification emails
-  await sendFacilityRegistrationNotification({
+  // 1. Persist to PostgreSQL if connected
+  if (isPgConnected) {
+    try {
+      await query(
+        `INSERT INTO facilities (id, name, type, governorate, address, bed_capacity, contact_person, work_email, phone, gahar_version, status, subscription_plan_id, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW())`,
+        [facilityId, newFacility.name, newFacility.type, newFacility.governorate, newFacility.address, newFacility.bed_capacity, newFacility.contact_person, newFacility.work_email, newFacility.phone, newFacility.gahar_version, newFacility.status, newFacility.subscription_plan_id]
+      );
+
+      await query(
+        `INSERT INTO users (id, email, password_hash, full_name, role, facility_id, is_active, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, true, NOW())`,
+        [userId, newUser.email, newUser.password_hash, newUser.full_name, newUser.role, newUser.facility_id]
+      );
+
+      if (newPayment) {
+        await query(
+          `INSERT INTO payments (id, facility_id, plan_id, amount, payment_method, status, transaction_ref, created_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())`,
+          [newPayment.id, newPayment.facility_id, newPayment.plan_id, newPayment.amount, newPayment.payment_method, newPayment.status, newPayment.transaction_ref]
+        );
+      }
+      console.log(`✅ Facility and Admin user persisted to PostgreSQL database [${facilityId}].`);
+    } catch (dbErr) {
+      console.warn("⚠️ Notice persisting facility registration to DB:", dbErr.message);
+    }
+  }
+
+  // 2. Add to in-memory store
+  memoryDb.facilities.unshift(newFacility);
+  memoryDb.users.unshift(newUser);
+  if (newPayment) memoryDb.payments.unshift(newPayment);
+
+  // 3. Dispatch automated notification emails asynchronously (non-blocking)
+  sendRegistrationWelcomeEmail({
+    workEmail: normalizedEmail,
+    facilityName,
+    contactPerson,
+    status: initialStatus,
+    subscriptionPlanId: selectedPlanId
+  }).catch(e => console.warn("Notice dispatching welcome email:", e.message));
+
+  sendFacilityRegistrationNotification({
     name: facilityName,
     type: facilityType,
     governorate,
     bedCapacity,
     contactPerson,
-    workEmail,
+    workEmail: normalizedEmail,
     phone,
-    subscriptionPlanId,
+    subscriptionPlanId: selectedPlanId,
     paymentMethod,
     status: initialStatus
-  });
+  }).catch(e => console.warn("Notice dispatching admin reg email:", e.message));
 
-  await sendRegistrationReceivedNotification(workEmail, facilityName);
-
-  logAuditEvent({ facilityId, userId, userEmail: workEmail, action: "FACILITY_REGISTRATION_SUBMITTED", details: { status: initialStatus, paymentMethod }, req });
+  logAuditEvent({ facilityId, userId, userEmail: normalizedEmail, action: "FACILITY_REGISTRATION_SUBMITTED", details: { status: initialStatus, paymentMethod }, req });
 
   const token = jwt.sign(
-    { userId, email: workEmail, role: "FACILITY_ADMIN", facilityId },
+    { userId, email: normalizedEmail, role: "FACILITY_ADMIN", facilityId },
     JWT_SECRET,
     { expiresIn: "24h" }
   );
@@ -401,7 +491,7 @@ app.post("/api/auth/register-facility", async (req, res) => {
     facility: newFacility,
     user: {
       id: userId,
-      email: workEmail,
+      email: normalizedEmail,
       fullName: contactPerson,
       role: "FACILITY_ADMIN",
       facilityId
@@ -416,26 +506,51 @@ app.post("/api/auth/forgot-password", async (req, res) => {
     return res.status(400).json({ success: false, message: "Email is required." });
   }
 
+  const normalizedEmail = email.trim().toLowerCase();
   const rawToken = crypto.randomBytes(32).toString("hex");
   const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
   const expiresAt = new Date(Date.now() + 3600 * 1000); // 1 hour
 
   const resetRecord = {
     id: uuidv4(),
-    email: email.toLowerCase(),
+    email: normalizedEmail,
     token_hash: tokenHash,
     expires_at: expiresAt.toISOString(),
     used: false,
     created_at: new Date().toISOString()
   };
 
+  // Persist to PostgreSQL if connected
+  if (isPgConnected) {
+    try {
+      await query(
+        `INSERT INTO password_resets (id, email, token_hash, expires_at, used, created_at)
+         VALUES ($1, $2, $3, $4, false, NOW())`,
+        [resetRecord.id, resetRecord.email, resetRecord.token_hash, resetRecord.expires_at]
+      );
+    } catch (err) {
+      console.warn("Notice persisting password reset to DB:", err.message);
+    }
+  }
+
   memoryDb.password_resets.push(resetRecord);
 
-  // Send reset email if user exists
-  const user = memoryDb.users.find(u => u.email.toLowerCase() === email.toLowerCase());
-  if (user) {
-    await sendPasswordResetNotification(email, rawToken);
-    logAuditEvent({ userEmail: email, action: "PASSWORD_RESET_REQUESTED", req });
+  // Send reset email if user exists (checked in DB or memoryDb)
+  let userExists = false;
+  if (isPgConnected) {
+    try {
+      const uRes = await query("SELECT id FROM users WHERE LOWER(email) = $1 LIMIT 1", [normalizedEmail]);
+      if (uRes && uRes.rows.length > 0) userExists = true;
+    } catch (_) {}
+  }
+  if (!userExists) {
+    userExists = memoryDb.users.some(u => u.email.toLowerCase() === normalizedEmail);
+  }
+
+  if (userExists) {
+    sendPasswordResetNotification(normalizedEmail, rawToken)
+      .catch(e => console.warn("Notice sending password reset email:", e.message));
+    logAuditEvent({ userEmail: normalizedEmail, action: "PASSWORD_RESET_REQUESTED", req });
   }
 
   // Always return safe generic message to prevent email enumeration
@@ -457,21 +572,52 @@ app.post("/api/auth/reset-password", async (req, res) => {
   }
 
   const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
-  const record = memoryDb.password_resets.find(r => r.token_hash === tokenHash && !r.used);
+  let record = null;
 
-  if (!record || new Date(record.expires_at) < new Date()) {
+  // 1. Check PostgreSQL if connected
+  if (isPgConnected) {
+    try {
+      const rRes = await query(
+        "SELECT * FROM password_resets WHERE token_hash = $1 AND used = false AND expires_at > NOW() LIMIT 1",
+        [tokenHash]
+      );
+      if (rRes && rRes.rows.length > 0) {
+        record = rRes.rows[0];
+      }
+    } catch (err) {
+      console.warn("Notice querying password reset from DB:", err.message);
+    }
+  }
+
+  // 2. Check memoryDb fallback
+  if (!record) {
+    record = memoryDb.password_resets.find(r => r.token_hash === tokenHash && !r.used && new Date(r.expires_at) >= new Date());
+  }
+
+  if (!record) {
     return res.status(400).json({ success: false, message: "Invalid or expired password reset token." });
   }
 
-  const user = memoryDb.users.find(u => u.email.toLowerCase() === record.email.toLowerCase());
-  if (!user) {
-    return res.status(404).json({ success: false, message: "User account associated with this token was not found." });
+  const newHash = bcrypt.hashSync(newPassword, 10);
+
+  // Update in PostgreSQL
+  if (isPgConnected) {
+    try {
+      await query("UPDATE users SET password_hash = $1 WHERE LOWER(email) = LOWER($2)", [newHash, record.email]);
+      await query("UPDATE password_resets SET used = true WHERE id = $1", [record.id]);
+    } catch (err) {
+      console.warn("Notice updating password in DB:", err.message);
+    }
   }
 
-  user.password_hash = bcrypt.hashSync(newPassword, 10);
+  // Update in memoryDb
+  const memUser = memoryDb.users.find(u => u.email.toLowerCase() === record.email.toLowerCase());
+  if (memUser) {
+    memUser.password_hash = newHash;
+  }
   record.used = true;
 
-  logAuditEvent({ userId: user.id, userEmail: user.email, action: "PASSWORD_RESET_COMPLETED", req });
+  logAuditEvent({ userEmail: record.email, action: "PASSWORD_RESET_COMPLETED", req });
 
   res.json({
     success: true,
@@ -755,8 +901,22 @@ app.post("/api/payments/verify", authenticateToken, authorizeRoles("SUPER_ADMIN"
     const planName = plan ? plan.name : "Standard Hospital Plan";
     const expiryDate = new Date(Date.now() + 365 * 24 * 3600 * 1000).toISOString();
 
-    await sendFacilityStatusNotification(facility.work_email, facility.name, "APPROVED");
-    await sendSubscriptionActivatedNotification(facility.work_email, facility.name, planName, expiryDate);
+    sendFacilityStatusNotification(facility.work_email, facility.name, "APPROVED")
+      .catch(e => console.warn("Notice sending facility status email:", e.message));
+    sendSubscriptionActivatedNotification(facility.work_email, facility.name, planName, expiryDate)
+      .catch(e => console.warn("Notice sending subscription activation email:", e.message));
+  }
+
+  // Update in PostgreSQL if connected
+  if (isPgConnected) {
+    try {
+      await query("UPDATE payments SET status = $1 WHERE id = $2", [payment.status, paymentId]);
+      if (facility && approved) {
+        await query("UPDATE facilities SET status = 'APPROVED' WHERE id = $1", [payment.facility_id]);
+      }
+    } catch (err) {
+      console.warn("Notice updating payment in DB:", err.message);
+    }
   }
 
   logAuditEvent({ facilityId: payment.facility_id, userId: req.user.userId, userEmail: req.user.email, action: `PAYMENT_VERIFICATION_${payment.status}`, req });
@@ -815,7 +975,7 @@ app.get("/api/documents", authenticateToken, enforceTenantIsolation, (req, res) 
   res.json({ success: true, documents: facilityDocs });
 });
 
-// Download tenant document binary buffer
+// Download tenant document (Short-lived signed URL or binary stream)
 app.get("/api/documents/:id/download", authenticateToken, enforceTenantIsolation, async (req, res) => {
   try {
     const { id } = req.params;
@@ -825,6 +985,21 @@ app.get("/api/documents/:id/download", authenticateToken, enforceTenantIsolation
       return res.status(404).json({ success: false, message: "Document not found or access denied." });
     }
 
+    // Try generating a short-lived signed URL if Supabase Storage is configured
+    const signed = await getSignedDownloadUrl({
+      facilityId: req.tenantFacilityId,
+      storagePath: doc.storagePath,
+      expiresInSeconds: 900 // 15 minutes
+    });
+
+    if (signed && signed.signedUrl) {
+      if (req.query.format === 'json') {
+        return res.json({ success: true, signedUrl: signed.signedUrl, expiresIn: signed.expiresInSeconds });
+      }
+      return res.redirect(signed.signedUrl);
+    }
+
+    // Fallback to streaming buffer (for local development storage)
     const buffer = await getDocumentBuffer({
       facilityId: req.tenantFacilityId,
       storagePath: doc.storagePath
@@ -1563,70 +1738,48 @@ CRITICAL ACCREDITATION RETRIEVAL INSTRUCTIONS:
 - Do NOT arbitrarily force, assume, or default to GSR.01 unless specifically asked by the user.`;
   }
 
-  let reply = "";
+  // Multi-provider execution: Groq -> Gemini -> OpenAI with timeouts and fallback
+  const aiResult = await generateCopilotReply({
+    systemPrompt,
+    userMessage: userQuery || prompt,
+    standardCode,
+    standardGrounding,
+    isArabic
+  });
 
-  // Try Groq models in order of preference
-  if (groq) {
-    const groqModels = [
-      process.env.GROQ_MODEL || "llama-3.3-70b-versatile",
-      "llama-3.3-70b-versatile",
-      "llama-3.1-8b-instant",
-      "llama3-70b-8192",
-    ];
-
-    for (const model of groqModels) {
-      if (reply) break;
-      try {
-        const completion = await groq.chat.completions.create({
-          model,
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userQuery || prompt },
-          ],
-          max_tokens: 1024,
-        });
-        reply = completion.choices[0].message?.content || "";
-        if (reply) console.log(`✅ Groq model used: ${model}`);
-      } catch (e) {
-        console.warn(`⚠️ Groq model ${model} failed:`, e.message?.split('\n')[0]);
-      }
-    }
+  if (aiResult.success) {
+    return res.json({
+      success: true,
+      reply: aiResult.reply,
+      provider: aiResult.provider,
+      model: aiResult.model,
+      standardCode: standardCode || null
+    });
   }
 
-  // Fallback to Gemini
-  if (!reply && genAI) {
-    const geminiModels = [process.env.GEMINI_MODEL, "gemini-1.5-flash", "gemini-2.5-flash", "gemini-1.5-pro"].filter(Boolean);
-    for (const m of geminiModels) {
-      if (reply) break;
-      try {
-        const model = genAI.getGenerativeModel({ model: m });
-        const result = await model.generateContent(`${systemPrompt}\n\nUser: ${userQuery || prompt}`);
-        reply = result.response.text();
-        if (reply) console.log(`✅ Gemini fallback used with model: ${m}`);
-      } catch (e) {
-        console.warn(`⚠️ Gemini error (${m}):`, e.message?.split('\n')[0]);
-      }
-    }
+  // All AI providers failed:
+  // If user requested an authoritative standard code, return official handbook grounding with clear disclaimer
+  if (standardCode && standardGrounding) {
+    const disclaimer = isArabic
+      ? `*(تنبيه: خدمة المساعد الذكي غير متاحة حالياً بسبب انشغال مزودي الخدمة السحابية. تم استرجاع نص المعيار المعتمد مباشرة من دليل جهار 2025 الرسمي)*\n\n`
+      : `*(Notice: Generative AI copilot is currently unavailable. Displaying verified authoritative text directly from the official GAHAR 2025 Handbook)*\n\n`;
+    
+    return res.json({
+      success: true,
+      reply: `${disclaimer}**GAHAR 2025 Official Reference — Standard ${standardCode}**\n\n${standardGrounding}`,
+      isAuthoritativeFallback: true,
+      standardCode
+    });
   }
 
-  // Authoritative deterministic fallback (directly grounded in dataset)
-  if (!reply) {
-    if (standardCode && standardGrounding) {
-      if (isArabic) {
-        reply = `**المرجع الرسمي لمعايير جهار 2025 — المعيار ${standardCode}**\n\n${standardGrounding}\n\n*ملاحظة: هذه البيانات مستخرجة مباشرة ومطابقة لدليل معايير اعتماد المستشفيات الرسمي GAHAR 2025.*`;
-      } else {
-        reply = `**GAHAR 2025 Official Reference — Standard ${standardCode}**\n\n${standardGrounding}\n\n*Note: This response is directly grounded in the authoritative GAHAR 2025 Accreditation Handbook.*`;
-      }
-    } else {
-      if (isArabic) {
-        reply = `**إرشادات جهار 2025 — ${screenContext || 'الاعتماد الصحي'}**\n\nبخصوص استفساركم: "${userQuery}":\n\n1. **أدلة الامتثال (Evidence of Compliance):** احرص على توثيق كافة السياسات والإجراءات وتحديد المسؤوليات وتواريخ المراجعة.\n2. **لجنة الجودة وسلامة المرضى:** يجب اعتماد كافة الوثائق والخطط من لجان المستشفى المختصة.\n3. **التطبيق والملاحظة الميدانية:** يتحقق مقيمو جهار من التطبيق الفعلي ومقابلات الكوادر وسجلات التدريب.\n4. **مؤشرات الأداء (KPIs):** تتبع مؤشرات القياس والتحسين المستمر لكل متطلب.\n\nيمكنك كتابة كود أي معيار (مثل GSR.01 أو GSR.05 أو IPC.01) لعرض متطلباته وأدلته التفصيلية فوراً.`;
-      } else {
-        reply = `**GAHAR 2025 Guidance — ${screenContext || 'Accreditation'}**\n\nRegarding your inquiry: "${userQuery}":\n\n1. **Evidence of Compliance (EOC):** Ensure all relevant policies, procedures, and logs are documented with dates and responsible personnel.\n2. **Governance Approval:** All documentation must be reviewed and approved by the Quality & Safety Committee.\n3. **Survey Verification:** GAHAR surveyors verify compliance through observation, staff interviews, and patient record reviews.\n4. **Key Performance Indicators:** Track monthly compliance metrics and corrective action plans.\n\nYou can also mention any specific GAHAR standard code (e.g. GSR.01, GSR.05, IPC.01) to get the exact requirements and evidence checklist.`;
-      }
-    }
-  }
-
-  res.json({ success: true, reply, standardCode: standardCode || null });
+  // General query failed with no AI provider available: return safe HTTP 503 error
+  return res.status(503).json({
+    success: false,
+    error: aiResult.error || "AI_ALL_PROVIDERS_UNAVAILABLE",
+    message: aiResult.message || "AI Copilot service is temporarily unavailable. All configured AI providers failed. Please try again shortly.",
+    providerErrors: aiResult.providerErrors,
+    standardCode: null
+  });
 });
 
 // =============================================================================
@@ -2522,10 +2675,50 @@ app.use((err, req, res, next) => {
 });
 
 // =============================================================================
-// Start Backend Server
+// Start Backend Server & Graceful Shutdown
 // =============================================================================
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, "0.0.0.0", () => {
+const server = app.listen(PORT, "0.0.0.0", async () => {
   console.log(`🚀 GAHAR Healthcare Accreditation Platform — Backend Server running on port ${PORT}`);
+  
+  // Asynchronous non-blocking startup checks
+  try {
+    await ensureSuperAdminProvisioned();
+  } catch (err) {
+    console.warn("⚠️ Super Admin startup provisioning check error:", err.message);
+  }
+
+  try {
+    await verifySmtpConnection();
+  } catch (err) {
+    console.warn("⚠️ SMTP startup verification error:", err.message);
+  }
 });
+
+function handleShutdown(signal) {
+  console.log(`\n🛑 Received ${signal}. Starting graceful shutdown...`);
+  server.close(async () => {
+    try {
+      if (pool) {
+        await pool.end();
+        console.log("🔌 PostgreSQL connection pool terminated cleanly.");
+      }
+    } catch (err) {
+      console.error("Error closing PostgreSQL pool:", err.message);
+    }
+    console.log("👋 GAHAR Backend Server terminated gracefully.");
+    process.exit(0);
+  });
+
+  // Force close if graceful shutdown hangs
+  setTimeout(() => {
+    console.error("⚠️ Forcefully terminating server after shutdown timeout.");
+    process.exit(1);
+  }, 10000);
+}
+
+process.on("SIGTERM", () => handleShutdown("SIGTERM"));
+process.on("SIGINT", () => handleShutdown("SIGINT"));
+
+module.exports = { app, server };
