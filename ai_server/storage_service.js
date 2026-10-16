@@ -217,10 +217,50 @@ async function deleteDocumentFile({ facilityId, storagePath }) {
   return true;
 }
 
+/**
+ * Generates a short-lived signed download URL for private documents in Supabase Storage
+ */
+async function getSignedDownloadUrl({ facilityId, storagePath, expiresInSeconds = 900 }) {
+  const expectedPrefix = `facilities/${facilityId}/`;
+  if (!storagePath.startsWith(expectedPrefix)) {
+    throw new Error('Access Denied: Cross-tenant storage access detected.');
+  }
+
+  const hasSupabaseConfig = !!(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
+  if (hasSupabaseConfig) {
+    try {
+      const bucketName = process.env.SUPABASE_STORAGE_BUCKET || 'gahar-documents';
+      const signUrl = `${process.env.SUPABASE_URL}/storage/v1/object/sign/${bucketName}/${storagePath}`;
+
+      const res = await fetch(signUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ expiresIn: expiresInSeconds }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const signedUrl = data.signedURL?.startsWith('http')
+          ? data.signedURL
+          : `${process.env.SUPABASE_URL}${data.signedURL}`;
+        return { signedUrl, expiresInSeconds };
+      }
+    } catch (err) {
+      console.warn('⚠️ Supabase Storage signed URL creation error:', err.message);
+    }
+  }
+
+  return null;
+}
+
 module.exports = {
   validateFile,
   uploadDocument,
   getDocumentBuffer,
+  getSignedDownloadUrl,
   deleteDocumentFile,
   MAX_FILE_SIZE_BYTES,
   ALLOWED_MIME_TYPES,

@@ -4,7 +4,7 @@
   "description": "GAHAR Multi-Tenant Production Backend Server",
   "main": "server.js",
   "scripts": {
-    "test": "node test_backend.js",
+    "test": "node test_comprehensive_production_suite.js",
     "start": "node server.js"
   },
   "keywords": [
