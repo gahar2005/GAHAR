@@ -131,6 +131,22 @@ const copilotLimiter = createRateLimiter({ windowMs: 60 * 1000, maxRequests: 60,
 // Health & Readiness Probes
 // =============================================================================
 
+// Root route — confirms the API is online
+app.get("/", (req, res) => {
+  res.status(200).json({
+    status: "online",
+    service: "GAHAR Healthcare Accreditation Platform API",
+    version: "1.0.0",
+    timestamp: new Date().toISOString(),
+    endpoints: {
+      health: "/health",
+      readiness: "/readiness",
+      api: "/api/*",
+    },
+  });
+});
+
+
 // Liveness probe (checks if HTTP process is alive)
 app.get("/health", (req, res) => {
   res.status(200).json({
