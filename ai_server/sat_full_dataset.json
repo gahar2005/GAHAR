@@ -1,6 +1,16 @@
 {
   "standards": [
     {
+      "standard_code": "GSR.01",
+      "chapter_code": "GSR",
+      "chapter_title": "General Safety Requirements",
+      "standard_title": "Patient identification",
+      "workbook_sheet": "GSR",
+      "book_reference_code": "ACT.03",
+      "sort_order": 10,
+      "is_essential": true
+    },
+    {
       "standard_code": "APC.01",
       "chapter_code": "APC",
       "chapter_title": "Access and Patient Care",
@@ -8,6 +18,16 @@
       "workbook_sheet": "APC",
       "sort_order": 20,
       "is_essential": false
+    },
+    {
+      "standard_code": "GSR.02",
+      "chapter_code": "GSR",
+      "chapter_title": "General Safety Requirements",
+      "standard_title": "Verbal and telephone orders",
+      "workbook_sheet": "GSR",
+      "book_reference_code": "ICD.18",
+      "sort_order": 20,
+      "is_essential": true
     },
     {
       "standard_code": "APC.02",
@@ -19,6 +39,16 @@
       "is_essential": false
     },
     {
+      "standard_code": "GSR.03",
+      "chapter_code": "GSR",
+      "chapter_title": "General Safety Requirements",
+      "standard_title": "Critical Results",
+      "workbook_sheet": "GSR",
+      "book_reference_code": "ICD.19",
+      "sort_order": 30,
+      "is_essential": true
+    },
+    {
       "standard_code": "APC.03",
       "chapter_code": "APC",
       "chapter_title": "Access and Patient Care",
@@ -26,6 +56,16 @@
       "workbook_sheet": "APC",
       "sort_order": 40,
       "is_essential": false
+    },
+    {
+      "standard_code": "GSR.04",
+      "chapter_code": "GSR",
+      "chapter_title": "General Safety Requirements",
+      "standard_title": "Handover Communication",
+      "workbook_sheet": "GSR",
+      "book_reference_code": "ACT.08",
+      "sort_order": 40,
+      "is_essential": true
     },
     {
       "standard_code": "PCC.01",
@@ -37,6 +77,16 @@
       "is_essential": false
     },
     {
+      "standard_code": "GSR.05",
+      "chapter_code": "GSR",
+      "chapter_title": "General Safety Requirements",
+      "standard_title": "Fall screening and prevention",
+      "workbook_sheet": "GSR",
+      "book_reference_code": "ICD.10",
+      "sort_order": 50,
+      "is_essential": true
+    },
+    {
       "standard_code": "PCC.02",
       "chapter_code": "PCC",
       "chapter_title": "Patient Centered Care",
@@ -44,6 +94,16 @@
       "workbook_sheet": "PCC",
       "sort_order": 60,
       "is_essential": false
+    },
+    {
+      "standard_code": "GSR.06",
+      "chapter_code": "GSR",
+      "chapter_title": "General Safety Requirements",
+      "standard_title": "Pressure Ulcer Prevention",
+      "workbook_sheet": "GSR",
+      "book_reference_code": "ICD.11",
+      "sort_order": 60,
+      "is_essential": true
     },
     {
       "standard_code": "PCC.03",
@@ -55,6 +115,16 @@
       "is_essential": false
     },
     {
+      "standard_code": "GSR.07",
+      "chapter_code": "GSR",
+      "chapter_title": "General Safety Requirements",
+      "standard_title": "Venous Thromboembolism Prophylaxis",
+      "workbook_sheet": "GSR",
+      "book_reference_code": "ICD.12",
+      "sort_order": 70,
+      "is_essential": true
+    },
+    {
       "standard_code": "PCC.04",
       "chapter_code": "PCC",
       "chapter_title": "Patient Centered Care",
@@ -62,6 +132,16 @@
       "workbook_sheet": "PCC",
       "sort_order": 80,
       "is_essential": false
+    },
+    {
+      "standard_code": "GSR.08",
+      "chapter_code": "GSR",
+      "chapter_title": "General Safety Requirements",
+      "standard_title": "Critical Alarms",
+      "workbook_sheet": "GSR",
+      "book_reference_code": "CSS.02",
+      "sort_order": 80,
+      "is_essential": true
     },
     {
       "standard_code": "PCC.05",
@@ -73,6 +153,16 @@
       "is_essential": false
     },
     {
+      "standard_code": "GSR.09",
+      "chapter_code": "GSR",
+      "chapter_title": "General Safety Requirements",
+      "standard_title": "Catheter and tube misconnections",
+      "workbook_sheet": "GSR",
+      "book_reference_code": "CSS.03",
+      "sort_order": 90,
+      "is_essential": true
+    },
+    {
       "standard_code": "PCC.06",
       "chapter_code": "PCC",
       "chapter_title": "Patient Centered Care",
@@ -80,6 +170,16 @@
       "workbook_sheet": "PCC",
       "sort_order": 100,
       "is_essential": false
+    },
+    {
+      "standard_code": "GSR.10",
+      "chapter_code": "GSR",
+      "chapter_title": "General Safety Requirements",
+      "standard_title": "Recognition and response to clinical deterioration",
+      "workbook_sheet": "GSR",
+      "book_reference_code": "ICD.22",
+      "sort_order": 100,
+      "is_essential": true
     },
     {
       "standard_code": "PCC.07",
@@ -91,6 +191,16 @@
       "is_essential": false
     },
     {
+      "standard_code": "GSR.11",
+      "chapter_code": "GSR",
+      "chapter_title": "General Safety Requirements",
+      "standard_title": "Cardiopulmonary resuscitation",
+      "workbook_sheet": "GSR",
+      "book_reference_code": "CSS.05",
+      "sort_order": 110,
+      "is_essential": true
+    },
+    {
       "standard_code": "PCC.08",
       "chapter_code": "PCC",
       "chapter_title": "Patient Centered Care",
@@ -98,6 +208,16 @@
       "workbook_sheet": "PCC",
       "sort_order": 120,
       "is_essential": false
+    },
+    {
+      "standard_code": "GSR.12",
+      "chapter_code": "GSR",
+      "chapter_title": "General Safety Requirements",
+      "standard_title": "Radiation Safety Program",
+      "workbook_sheet": "GSR",
+      "book_reference_code": "DAS.09",
+      "sort_order": 120,
+      "is_essential": true
     },
     {
       "standard_code": "PCC.09",
@@ -109,6 +229,16 @@
       "is_essential": false
     },
     {
+      "standard_code": "GSR.13",
+      "chapter_code": "GSR",
+      "chapter_title": "General Safety Requirements",
+      "standard_title": "Laboratory Safety Program",
+      "workbook_sheet": "GSR",
+      "book_reference_code": "DAS.23",
+      "sort_order": 130,
+      "is_essential": true
+    },
+    {
       "standard_code": "PCC.10",
       "chapter_code": "PCC",
       "chapter_title": "Patient Centered Care",
@@ -116,6 +246,16 @@
       "workbook_sheet": "PCC",
       "sort_order": 140,
       "is_essential": false
+    },
+    {
+      "standard_code": "GSR.14",
+      "chapter_code": "GSR",
+      "chapter_title": "General Safety Requirements",
+      "standard_title": "Surgical Site Marking",
+      "workbook_sheet": "GSR",
+      "book_reference_code": "SAS.05",
+      "sort_order": 140,
+      "is_essential": true
     },
     {
       "standard_code": "PCC.11",
@@ -127,6 +267,16 @@
       "is_essential": false
     },
     {
+      "standard_code": "GSR.15",
+      "chapter_code": "GSR",
+      "chapter_title": "General Safety Requirements",
+      "standard_title": "Pre-operative Checklist",
+      "workbook_sheet": "GSR",
+      "book_reference_code": "SAS.06",
+      "sort_order": 150,
+      "is_essential": true
+    },
+    {
       "standard_code": "PCC.12",
       "chapter_code": "PCC",
       "chapter_title": "Patient Centered Care",
@@ -134,6 +284,16 @@
       "workbook_sheet": "PCC",
       "sort_order": 160,
       "is_essential": false
+    },
+    {
+      "standard_code": "GSR.16",
+      "chapter_code": "GSR",
+      "chapter_title": "General Safety Requirements",
+      "standard_title": "Time-out/ sing out",
+      "workbook_sheet": "GSR",
+      "book_reference_code": "SAS.07",
+      "sort_order": 160,
+      "is_essential": true
     },
     {
       "standard_code": "PCC.13",
@@ -145,6 +305,16 @@
       "is_essential": false
     },
     {
+      "standard_code": "GSR.17",
+      "chapter_code": "GSR",
+      "chapter_title": "General Safety Requirements",
+      "standard_title": "Instrument Retention Prevention",
+      "workbook_sheet": "GSR",
+      "book_reference_code": "SAS.09",
+      "sort_order": 170,
+      "is_essential": true
+    },
+    {
       "standard_code": "PCC.16",
       "chapter_code": "PCC",
       "chapter_title": "Patient Centered Care",
@@ -152,6 +322,16 @@
       "workbook_sheet": "PCC",
       "sort_order": 180,
       "is_essential": false
+    },
+    {
+      "standard_code": "GSR.18",
+      "chapter_code": "GSR",
+      "chapter_title": "General Safety Requirements",
+      "standard_title": "Medication Reconciliation, best possible medication history (BPMH)",
+      "workbook_sheet": "GSR",
+      "book_reference_code": "MMS.10",
+      "sort_order": 180,
+      "is_essential": true
     },
     {
       "standard_code": "ACT.01",
@@ -163,6 +343,16 @@
       "is_essential": false
     },
     {
+      "standard_code": "GSR.19",
+      "chapter_code": "GSR",
+      "chapter_title": "General Safety Requirements",
+      "standard_title": "Medication storage and labelling",
+      "workbook_sheet": "GSR",
+      "book_reference_code": "MMS.04",
+      "sort_order": 190,
+      "is_essential": true
+    },
+    {
       "standard_code": "ACT.02",
       "chapter_code": "ACT",
       "chapter_title": "Assessment and Care of Patient",
@@ -170,6 +360,16 @@
       "workbook_sheet": "ACT",
       "sort_order": 200,
       "is_essential": false
+    },
+    {
+      "standard_code": "GSR.20",
+      "chapter_code": "GSR",
+      "chapter_title": "General Safety Requirements",
+      "standard_title": "High-alert medications and concentrated electrolytes",
+      "workbook_sheet": "GSR",
+      "book_reference_code": "MMS.06",
+      "sort_order": 200,
+      "is_essential": true
     },
     {
       "standard_code": "ACT.03",
@@ -181,6 +381,16 @@
       "is_essential": false
     },
     {
+      "standard_code": "GSR.21",
+      "chapter_code": "GSR",
+      "chapter_title": "General Safety Requirements",
+      "standard_title": "Look-alike and Sound like medications.",
+      "workbook_sheet": "GSR",
+      "book_reference_code": "MMS.07",
+      "sort_order": 210,
+      "is_essential": true
+    },
+    {
       "standard_code": "ACT.04",
       "chapter_code": "ACT",
       "chapter_title": "Assessment and Care of Patient",
@@ -188,6 +398,16 @@
       "workbook_sheet": "ACT",
       "sort_order": 220,
       "is_essential": false
+    },
+    {
+      "standard_code": "GSR.22",
+      "chapter_code": "GSR",
+      "chapter_title": "General Safety Requirements",
+      "standard_title": "Hand Hygiene",
+      "workbook_sheet": "GSR",
+      "book_reference_code": "IPC.04",
+      "sort_order": 220,
+      "is_essential": true
     },
     {
       "standard_code": "ACT.05",
@@ -199,6 +419,16 @@
       "is_essential": false
     },
     {
+      "standard_code": "GSR.23",
+      "chapter_code": "GSR",
+      "chapter_title": "General Safety Requirements",
+      "standard_title": "Fire and smoke safety",
+      "workbook_sheet": "GSR",
+      "book_reference_code": "EFS.03",
+      "sort_order": 230,
+      "is_essential": true
+    },
+    {
       "standard_code": "ACT.06",
       "chapter_code": "ACT",
       "chapter_title": "Assessment and Care of Patient",
@@ -206,6 +436,16 @@
       "workbook_sheet": "ACT",
       "sort_order": 240,
       "is_essential": false
+    },
+    {
+      "standard_code": "GSR.24",
+      "chapter_code": "GSR",
+      "chapter_title": "General Safety Requirements",
+      "standard_title": "Fire drills",
+      "workbook_sheet": "GSR",
+      "book_reference_code": "EFS.04",
+      "sort_order": 240,
+      "is_essential": true
     },
     {
       "standard_code": "ACT.07",
@@ -217,6 +457,16 @@
       "is_essential": false
     },
     {
+      "standard_code": "GSR.25",
+      "chapter_code": "GSR",
+      "chapter_title": "General Safety Requirements",
+      "standard_title": "Hazardous materials safety",
+      "workbook_sheet": "GSR",
+      "book_reference_code": "EFS.06",
+      "sort_order": 250,
+      "is_essential": true
+    },
+    {
       "standard_code": "ACT.08",
       "chapter_code": "ACT",
       "chapter_title": "Assessment and Care of Patient",
@@ -224,6 +474,16 @@
       "workbook_sheet": "ACT",
       "sort_order": 260,
       "is_essential": false
+    },
+    {
+      "standard_code": "GSR.26",
+      "chapter_code": "GSR",
+      "chapter_title": "General Safety Requirements",
+      "standard_title": "Safety Management Plan",
+      "workbook_sheet": "GSR",
+      "book_reference_code": "EFS.07",
+      "sort_order": 260,
+      "is_essential": true
     },
     {
       "standard_code": "ACT.09",
@@ -235,6 +495,16 @@
       "is_essential": false
     },
     {
+      "standard_code": "GSR.27",
+      "chapter_code": "GSR",
+      "chapter_title": "General Safety Requirements",
+      "standard_title": "Medical Equipment Plan",
+      "workbook_sheet": "GSR",
+      "book_reference_code": "EFS.10",
+      "sort_order": 270,
+      "is_essential": true
+    },
+    {
       "standard_code": "ACT.10",
       "chapter_code": "ACT",
       "chapter_title": "Assessment and Care of Patient",
@@ -244,6 +514,16 @@
       "is_essential": false
     },
     {
+      "standard_code": "GSR.28",
+      "chapter_code": "GSR",
+      "chapter_title": "General Safety Requirements",
+      "standard_title": "Utilities Management Plan",
+      "workbook_sheet": "GSR",
+      "book_reference_code": "EFS.11",
+      "sort_order": 280,
+      "is_essential": true
+    },
+    {
       "standard_code": "ACT.11",
       "chapter_code": "ACT",
       "chapter_title": "Assessment and Care of Patient",
@@ -251,6 +531,16 @@
       "workbook_sheet": "ACT",
       "sort_order": 290,
       "is_essential": false
+    },
+    {
+      "standard_code": "GSR.29",
+      "chapter_code": "GSR",
+      "chapter_title": "General Safety Requirements",
+      "standard_title": "Abbreviations",
+      "workbook_sheet": "GSR",
+      "book_reference_code": "IMT.04",
+      "sort_order": 290,
+      "is_essential": true
     },
     {
       "standard_code": "ACT.12",
@@ -649,6 +939,16 @@
       "is_essential": false
     },
     {
+      "standard_code": "PCC.14",
+      "chapter_code": "PCC",
+      "category": "PATIENT-CENTERED CARE",
+      "standard_title": "The hospital’s responsibility towards the patient’s belongings is defined.",
+      "book_reference_code": null,
+      "workbook_sheet": "PCC",
+      "sort_order": 730,
+      "is_essential": false
+    },
+    {
       "standard_code": "DAS.04",
       "chapter_code": "DAS",
       "chapter_title": "Diagnostic and Ancillary Services",
@@ -690,6 +990,16 @@
       "chapter_title": "Diagnostic and Ancillary Services",
       "standard_title": "Copies of medical imaging or ancillary results are recorded in the patient’s medical record.",
       "workbook_sheet": "DAS",
+      "sort_order": 780,
+      "is_essential": false
+    },
+    {
+      "standard_code": "PCC.15",
+      "chapter_code": "PCC",
+      "category": "PATIENT-CENTERED CARE",
+      "standard_title": "The hospital improves provided services based on measured patients' and families’ feedback.",
+      "book_reference_code": null,
+      "workbook_sheet": "PCC",
       "sort_order": 780,
       "is_essential": false
     },
@@ -2233,294 +2543,24 @@
       "is_essential": false
     },
     {
-      "standard_code": "GSR.01",
-      "chapter_code": "GSR",
-      "chapter_title": "General Safety Requirements",
-      "standard_title": "Patient identification",
-      "workbook_sheet": "GSR",
-      "book_reference_code": "ACT.03",
-      "sort_order": 10,
-      "is_essential": true
+      "standard_code": "DAS.24",
+      "chapter_code": "DAS",
+      "category": "DIAGNOSTIC AND ANCILLARY SERVICES",
+      "standard_title": "Point-of-care testing is monitored for providing accurate and reliable results.",
+      "book_reference_code": null,
+      "workbook_sheet": "DAS",
+      "sort_order": 4460,
+      "is_essential": false
     },
     {
-      "standard_code": "GSR.02",
-      "chapter_code": "GSR",
-      "chapter_title": "General Safety Requirements",
-      "standard_title": "Verbal and telephone orders",
-      "workbook_sheet": "GSR",
-      "book_reference_code": "ICD.18",
-      "sort_order": 20,
-      "is_essential": true
-    },
-    {
-      "standard_code": "GSR.03",
-      "chapter_code": "GSR",
-      "chapter_title": "General Safety Requirements",
-      "standard_title": "Critical Results",
-      "workbook_sheet": "GSR",
-      "book_reference_code": "ICD.19",
-      "sort_order": 30,
-      "is_essential": true
-    },
-    {
-      "standard_code": "GSR.04",
-      "chapter_code": "GSR",
-      "chapter_title": "General Safety Requirements",
-      "standard_title": "Handover Communication",
-      "workbook_sheet": "GSR",
-      "book_reference_code": "ACT.08",
-      "sort_order": 40,
-      "is_essential": true
-    },
-    {
-      "standard_code": "GSR.05",
-      "chapter_code": "GSR",
-      "chapter_title": "General Safety Requirements",
-      "standard_title": "Fall screening and prevention",
-      "workbook_sheet": "GSR",
-      "book_reference_code": "ICD.10",
-      "sort_order": 50,
-      "is_essential": true
-    },
-    {
-      "standard_code": "GSR.06",
-      "chapter_code": "GSR",
-      "chapter_title": "General Safety Requirements",
-      "standard_title": "Pressure Ulcer Prevention",
-      "workbook_sheet": "GSR",
-      "book_reference_code": "ICD.11",
-      "sort_order": 60,
-      "is_essential": true
-    },
-    {
-      "standard_code": "GSR.07",
-      "chapter_code": "GSR",
-      "chapter_title": "General Safety Requirements",
-      "standard_title": "Venous Thromboembolism Prophylaxis",
-      "workbook_sheet": "GSR",
-      "book_reference_code": "ICD.12",
-      "sort_order": 70,
-      "is_essential": true
-    },
-    {
-      "standard_code": "GSR.08",
-      "chapter_code": "GSR",
-      "chapter_title": "General Safety Requirements",
-      "standard_title": "Critical Alarms",
-      "workbook_sheet": "GSR",
-      "book_reference_code": "CSS.02",
-      "sort_order": 80,
-      "is_essential": true
-    },
-    {
-      "standard_code": "GSR.09",
-      "chapter_code": "GSR",
-      "chapter_title": "General Safety Requirements",
-      "standard_title": "Catheter and tube misconnections",
-      "workbook_sheet": "GSR",
-      "book_reference_code": "CSS.03",
-      "sort_order": 90,
-      "is_essential": true
-    },
-    {
-      "standard_code": "GSR.10",
-      "chapter_code": "GSR",
-      "chapter_title": "General Safety Requirements",
-      "standard_title": "Recognition and response to clinical deterioration",
-      "workbook_sheet": "GSR",
-      "book_reference_code": "ICD.22",
-      "sort_order": 100,
-      "is_essential": true
-    },
-    {
-      "standard_code": "GSR.11",
-      "chapter_code": "GSR",
-      "chapter_title": "General Safety Requirements",
-      "standard_title": "Cardiopulmonary resuscitation",
-      "workbook_sheet": "GSR",
-      "book_reference_code": "CSS.05",
-      "sort_order": 110,
-      "is_essential": true
-    },
-    {
-      "standard_code": "GSR.12",
-      "chapter_code": "GSR",
-      "chapter_title": "General Safety Requirements",
-      "standard_title": "Radiation Safety Program",
-      "workbook_sheet": "GSR",
-      "book_reference_code": "DAS.09",
-      "sort_order": 120,
-      "is_essential": true
-    },
-    {
-      "standard_code": "GSR.13",
-      "chapter_code": "GSR",
-      "chapter_title": "General Safety Requirements",
-      "standard_title": "Laboratory Safety Program",
-      "workbook_sheet": "GSR",
-      "book_reference_code": "DAS.23",
-      "sort_order": 130,
-      "is_essential": true
-    },
-    {
-      "standard_code": "GSR.14",
-      "chapter_code": "GSR",
-      "chapter_title": "General Safety Requirements",
-      "standard_title": "Surgical Site Marking",
-      "workbook_sheet": "GSR",
-      "book_reference_code": "SAS.05",
-      "sort_order": 140,
-      "is_essential": true
-    },
-    {
-      "standard_code": "GSR.15",
-      "chapter_code": "GSR",
-      "chapter_title": "General Safety Requirements",
-      "standard_title": "Pre-operative Checklist",
-      "workbook_sheet": "GSR",
-      "book_reference_code": "SAS.06",
-      "sort_order": 150,
-      "is_essential": true
-    },
-    {
-      "standard_code": "GSR.16",
-      "chapter_code": "GSR",
-      "chapter_title": "General Safety Requirements",
-      "standard_title": "Time-out/ sing out",
-      "workbook_sheet": "GSR",
-      "book_reference_code": "SAS.07",
-      "sort_order": 160,
-      "is_essential": true
-    },
-    {
-      "standard_code": "GSR.17",
-      "chapter_code": "GSR",
-      "chapter_title": "General Safety Requirements",
-      "standard_title": "Instrument Retention Prevention",
-      "workbook_sheet": "GSR",
-      "book_reference_code": "SAS.09",
-      "sort_order": 170,
-      "is_essential": true
-    },
-    {
-      "standard_code": "GSR.18",
-      "chapter_code": "GSR",
-      "chapter_title": "General Safety Requirements",
-      "standard_title": "Medication Reconciliation, best possible medication history (BPMH)",
-      "workbook_sheet": "GSR",
-      "book_reference_code": "MMS.10",
-      "sort_order": 180,
-      "is_essential": true
-    },
-    {
-      "standard_code": "GSR.19",
-      "chapter_code": "GSR",
-      "chapter_title": "General Safety Requirements",
-      "standard_title": "Medication storage and labelling",
-      "workbook_sheet": "GSR",
-      "book_reference_code": "MMS.04",
-      "sort_order": 190,
-      "is_essential": true
-    },
-    {
-      "standard_code": "GSR.20",
-      "chapter_code": "GSR",
-      "chapter_title": "General Safety Requirements",
-      "standard_title": "High-alert medications and concentrated electrolytes",
-      "workbook_sheet": "GSR",
-      "book_reference_code": "MMS.06",
-      "sort_order": 200,
-      "is_essential": true
-    },
-    {
-      "standard_code": "GSR.21",
-      "chapter_code": "GSR",
-      "chapter_title": "General Safety Requirements",
-      "standard_title": "Look-alike and Sound like medications.",
-      "workbook_sheet": "GSR",
-      "book_reference_code": "MMS.07",
-      "sort_order": 210,
-      "is_essential": true
-    },
-    {
-      "standard_code": "GSR.22",
-      "chapter_code": "GSR",
-      "chapter_title": "General Safety Requirements",
-      "standard_title": "Hand Hygiene",
-      "workbook_sheet": "GSR",
-      "book_reference_code": "IPC.04",
-      "sort_order": 220,
-      "is_essential": true
-    },
-    {
-      "standard_code": "GSR.23",
-      "chapter_code": "GSR",
-      "chapter_title": "General Safety Requirements",
-      "standard_title": "Fire and smoke safety",
-      "workbook_sheet": "GSR",
-      "book_reference_code": "EFS.03",
-      "sort_order": 230,
-      "is_essential": true
-    },
-    {
-      "standard_code": "GSR.24",
-      "chapter_code": "GSR",
-      "chapter_title": "General Safety Requirements",
-      "standard_title": "Fire drills",
-      "workbook_sheet": "GSR",
-      "book_reference_code": "EFS.04",
-      "sort_order": 240,
-      "is_essential": true
-    },
-    {
-      "standard_code": "GSR.25",
-      "chapter_code": "GSR",
-      "chapter_title": "General Safety Requirements",
-      "standard_title": "Hazardous materials safety",
-      "workbook_sheet": "GSR",
-      "book_reference_code": "EFS.06",
-      "sort_order": 250,
-      "is_essential": true
-    },
-    {
-      "standard_code": "GSR.26",
-      "chapter_code": "GSR",
-      "chapter_title": "General Safety Requirements",
-      "standard_title": "Safety Management Plan",
-      "workbook_sheet": "GSR",
-      "book_reference_code": "EFS.07",
-      "sort_order": 260,
-      "is_essential": true
-    },
-    {
-      "standard_code": "GSR.27",
-      "chapter_code": "GSR",
-      "chapter_title": "General Safety Requirements",
-      "standard_title": "Medical Equipment Plan",
-      "workbook_sheet": "GSR",
-      "book_reference_code": "EFS.10",
-      "sort_order": 270,
-      "is_essential": true
-    },
-    {
-      "standard_code": "GSR.28",
-      "chapter_code": "GSR",
-      "chapter_title": "General Safety Requirements",
-      "standard_title": "Utilities Management Plan",
-      "workbook_sheet": "GSR",
-      "book_reference_code": "EFS.11",
-      "sort_order": 280,
-      "is_essential": true
-    },
-    {
-      "standard_code": "GSR.29",
-      "chapter_code": "GSR",
-      "chapter_title": "General Safety Requirements",
-      "standard_title": "Abbreviations",
-      "workbook_sheet": "GSR",
-      "book_reference_code": "IMT.04",
-      "sort_order": 290,
-      "is_essential": true
+      "standard_code": "IMT.05",
+      "chapter_code": "IMT",
+      "category": "INFORMATION MANAGEMENT AND TECHNOLOGY",
+      "standard_title": "The hospital maintains data and information confidentiality and security.",
+      "book_reference_code": null,
+      "workbook_sheet": "IMT",
+      "sort_order": 10320,
+      "is_essential": false
     }
   ],
   "subEvidence": [
@@ -3235,8 +3275,8 @@
       "sort_order": 720
     },
     {
-      "id": "PCC.13.1",
-      "standard_code": "PCC.13",
+      "id": "PCC.14.1",
+      "standard_code": "PCC.14",
       "item_number": 1,
       "requirement_text": "The hospital has an approved policy guiding hospital responsibilities for patient’s belongings as mentioned in the intent from a) through e).",
       "documents_required": "سياسة معتمدة، سارية، وتحتوي على متطلبات المعيار",
@@ -3245,8 +3285,8 @@
       "sort_order": 730
     },
     {
-      "id": "PCC.13.2",
-      "standard_code": "PCC.13",
+      "id": "PCC.14.2",
+      "standard_code": "PCC.14",
       "item_number": 2,
       "requirement_text": "Responsible staff members are aware of the hospital’s policy.",
       "documents_required": null,
@@ -3255,8 +3295,8 @@
       "sort_order": 740
     },
     {
-      "id": "PCC.13.3",
-      "standard_code": "PCC.13",
+      "id": "PCC.14.3",
+      "standard_code": "PCC.14",
       "item_number": 3,
       "requirement_text": "Information about the hospital's responsibility for belongings is given to the patient or family, as applicable.",
       "documents_required": null,
@@ -3265,8 +3305,8 @@
       "sort_order": 750
     },
     {
-      "id": "PCC.13.4",
-      "standard_code": "PCC.13",
+      "id": "PCC.14.4",
+      "standard_code": "PCC.14",
       "item_number": 4,
       "requirement_text": "The patient’s belongings are protected and recorded according to the policy.",
       "documents_required": "سجلات متعلقات المرضى",
@@ -3285,8 +3325,8 @@
       "sort_order": 770
     },
     {
-      "id": "PCC.13.1",
-      "standard_code": "PCC.13",
+      "id": "PCC.15.1",
+      "standard_code": "PCC.15",
       "item_number": 1,
       "requirement_text": "The hospital has an approved policy guiding the process of patient and family feedback measurement as mentioned in the intent from a) through c).",
       "documents_required": "سياسة معتمدة، سارية، وتحتوي على متطلبات المعيار",
@@ -3295,8 +3335,8 @@
       "sort_order": 780
     },
     {
-      "id": "PCC.13.2",
-      "standard_code": "PCC.13",
+      "id": "PCC.15.2",
+      "standard_code": "PCC.15",
       "item_number": 2,
       "requirement_text": "Feedback from patients and families is received, analyzed, and interpreted.",
       "documents_required": "تقارير التحليل",
@@ -3305,8 +3345,8 @@
       "sort_order": 790
     },
     {
-      "id": "PCC.13.3",
-      "standard_code": "PCC.13",
+      "id": "PCC.15.3",
+      "standard_code": "PCC.15",
       "item_number": 3,
       "requirement_text": "The interpreted feedback is shared with the concerned staff members.",
       "documents_required": null,
@@ -6965,8 +7005,8 @@
       "sort_order": 4450
     },
     {
-      "id": "DAS.23.1",
-      "standard_code": "DAS.23",
+      "id": "DAS.24.1",
+      "standard_code": "DAS.24",
       "item_number": 1,
       "requirement_text": "The laboratory assigns a competent responsible staff member for supervising the point of care testing services.",
       "documents_required": "امر التكليف",
@@ -6975,8 +7015,8 @@
       "sort_order": 4460
     },
     {
-      "id": "DAS.23.2",
-      "standard_code": "DAS.23",
+      "id": "DAS.24.2",
+      "standard_code": "DAS.24",
       "item_number": 2,
       "requirement_text": "A competent staff member is responsible for performing POCT.",
       "documents_required": "تقييمات الكفاءة",
@@ -6985,8 +7025,8 @@
       "sort_order": 4470
     },
     {
-      "id": "DAS.23.3",
-      "standard_code": "DAS.23",
+      "id": "DAS.24.3",
+      "standard_code": "DAS.24",
       "item_number": 3,
       "requirement_text": "The hospital identifies all POCT sites, and the testing performed.",
       "documents_required": "تقارير",
@@ -6995,8 +7035,8 @@
       "sort_order": 4480
     },
     {
-      "id": "DAS.23.4",
-      "standard_code": "DAS.23",
+      "id": "DAS.24.4",
+      "standard_code": "DAS.24",
       "item_number": 4,
       "requirement_text": "There is a defined process for performing and reporting point of care testing (POCT).",
       "documents_required": null,
@@ -7005,8 +7045,8 @@
       "sort_order": 4490
     },
     {
-      "id": "DAS.23.5",
-      "standard_code": "DAS.23",
+      "id": "DAS.24.5",
+      "standard_code": "DAS.24",
       "item_number": 5,
       "requirement_text": "Quality control procedures for POCT are recorded and implemented",
       "documents_required": "التوثيق والتقارير",
@@ -12825,8 +12865,8 @@
       "sort_order": 10310
     },
     {
-      "id": "IMT.04.1",
-      "standard_code": "IMT.04",
+      "id": "IMT.05.1",
+      "standard_code": "IMT.05",
       "item_number": 1,
       "requirement_text": "The hospital has an approved policy that includes all the points in the intent from a) through g).",
       "documents_required": "سياسة معتمدة، سارية، وتحتوي على متطلبات المعيار",
@@ -12835,8 +12875,8 @@
       "sort_order": 10320
     },
     {
-      "id": "IMT.04.2",
-      "standard_code": "IMT.04",
+      "id": "IMT.05.2",
+      "standard_code": "IMT.05",
       "item_number": 2,
       "requirement_text": "All staff are aware of the policy requirements.",
       "documents_required": "ملفات العاملين - اقرارات سرية البيانات",
@@ -12845,8 +12885,8 @@
       "sort_order": 10330
     },
     {
-      "id": "IMT.04.3",
-      "standard_code": "IMT.04",
+      "id": "IMT.05.3",
+      "standard_code": "IMT.05",
       "item_number": 3,
       "requirement_text": "There is a list of authorized individuals with access to the patient’s medical record.",
       "documents_required": "قائمة صلاحيات",
@@ -12855,8 +12895,8 @@
       "sort_order": 10340
     },
     {
-      "id": "IMT.04.4",
-      "standard_code": "IMT.04",
+      "id": "IMT.05.4",
+      "standard_code": "IMT.05",
       "item_number": 4,
       "requirement_text": "Only authorized individuals have access to patient’s medical records.",
       "documents_required": null,

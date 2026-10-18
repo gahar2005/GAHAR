@@ -24,7 +24,7 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 
 const { app } = require('./server');
-const { query, memoryDb, isPgConnected } = require('./db');
+const { query, memoryDb, isDbConnected } = require('./db');
 const { generateCopilotReply, getProviderStatus } = require('./ai_service');
 const { verifySmtpConnection, sendRegistrationWelcomeEmail, sendSubscriptionActivatedNotification } = require('./email_service');
 const { getSignedDownloadUrl, validateFile } = require('./storage_service');
@@ -124,7 +124,7 @@ async function runTestSuite() {
     // -------------------------------------------------------------------------
     console.log('\n--- TEST 3: PostgreSQL Connectivity & Error Handling ---');
     // Ensure databaseUrl handling behaves safely without crashing
-    const dbStatus = isPgConnected ? 'CONNECTED' : 'IN_MEMORY_FALLBACK';
+    const dbStatus = isDbConnected() ? 'CONNECTED' : 'IN_MEMORY_FALLBACK';
     console.log(`  ℹ️ PostgreSQL runtime state: ${dbStatus}`);
     assert(
       typeof query === 'function',

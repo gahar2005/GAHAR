@@ -3,14 +3,21 @@
 // Mock Survey Prep, Continuous Monitoring & Operational/Financial ROI Analytics
 // =============================================================================
 
-const { query, isPgConnected } = require('./db');
+const { query, isDbConnected } = require('./db');
 const { v4: uuidv4 } = require('uuid');
+
+const checkPg = () => typeof isDbConnected === 'function' ? isDbConnected() : false;
+const isProduction = process.env.NODE_ENV === 'production';
 
 // ─── Phase 3: Survey Preparation & Mock Survey ───────────────────────────────
 
 const memoryMockSurveys = new Map();
 
 async function createMockSurveyRequest(facilityId, data) {
+  if (isProduction && !checkPg()) {
+    throw new Error("Mock survey service unavailable without persistent database.");
+  }
+
   const record = {
     id: uuidv4(),
     facility_id: facilityId,
@@ -53,7 +60,7 @@ async function createMockSurveyRequest(facilityId, data) {
     created_at: new Date().toISOString(),
   };
 
-  if (isPgConnected) {
+  if (checkPg()) {
     try {
       const res = await query(`
         INSERT INTO mock_surveys (
@@ -79,7 +86,8 @@ async function createMockSurveyRequest(facilityId, data) {
       ]);
       return res.rows[0];
     } catch (e) {
-      console.warn('DB createMockSurveyRequest error:', e.message);
+      console.error('DB createMockSurveyRequest error:', e.message);
+      if (isProduction) throw e;
     }
   }
 
@@ -89,12 +97,17 @@ async function createMockSurveyRequest(facilityId, data) {
 }
 
 async function getMockSurveysForFacility(facilityId) {
-  if (isPgConnected) {
+  if (isProduction && !checkPg()) {
+    throw new Error("Mock survey service unavailable without persistent database.");
+  }
+
+  if (checkPg()) {
     try {
       const res = await query('SELECT * FROM mock_surveys WHERE facility_id = $1 ORDER BY created_at DESC', [facilityId]);
-      if (res && res.rows.length > 0) return res.rows;
+      if (res && res.rows) return res.rows;
     } catch (e) {
-      console.warn('DB getMockSurveysForFacility error:', e.message);
+      console.error('DB getMockSurveysForFacility error:', e.message);
+      if (isProduction) throw e;
     }
   }
   return memoryMockSurveys.get(facilityId) || [];
@@ -103,21 +116,25 @@ async function getMockSurveysForFacility(facilityId) {
 // ─── Phase 4: Continuous Monitoring Engine ───────────────────────────────────
 
 async function getMonitoringSummary(facilityId) {
+  if (isProduction && !checkPg()) {
+    throw new Error("Monitoring service unavailable without persistent database.");
+  }
+
   // Aggregate real system data
   let overdueGapsCount = 0;
   let expiringLicensesCount = 0;
   let pendingDocumentsCount = 0;
 
-  if (isPgConnected) {
+  if (checkPg()) {
     try {
       const gapsRes = await query(
-        `SELECT COUNT(*) FROM gaps WHERE facility_id = $1 AND due_date < CURRENT_DATE AND status != 'compliant'`,
+        `SELECT COUNT(*) FROM gaps WHERE facility_id = $1 AND due_date < CURRENT_DATE AND status != 'compliant' AND deleted_at IS NULL`,
         [facilityId]
       );
       overdueGapsCount = parseInt(gapsRes?.rows[0]?.count || 0, 10);
 
       const licRes = await query(
-        `SELECT COUNT(*) FROM licenses WHERE facility_id = $1 AND expiration_date <= CURRENT_DATE + INTERVAL '60 days'`,
+        `SELECT COUNT(*) FROM licenses WHERE facility_id = $1 AND expiration_date <= CURRENT_DATE + INTERVAL '60 days' AND deleted_at IS NULL`,
         [facilityId]
       );
       expiringLicensesCount = parseInt(licRes?.rows[0]?.count || 0, 10);
@@ -128,7 +145,8 @@ async function getMonitoringSummary(facilityId) {
       );
       pendingDocumentsCount = parseInt(docRes?.rows[0]?.count || 0, 10);
     } catch (e) {
-      console.warn('DB getMonitoringSummary error:', e.message);
+      console.error('DB getMonitoringSummary error:', e.message);
+      if (isProduction) throw e;
     }
   }
 
@@ -196,16 +214,21 @@ async function getMonitoringSummary(facilityId) {
 // ─── Operational & Financial ROI Analytics Engine ───────────────────────────
 
 async function getFacilityRoiAnalytics(facilityId) {
+  if (isProduction && !checkPg()) {
+    throw new Error("ROI analytics service unavailable without persistent database.");
+  }
+
   let roi = null;
 
-  if (isPgConnected) {
+  if (checkPg()) {
     try {
       const res = await query('SELECT * FROM roi_metrics WHERE facility_id = $1', [facilityId]);
       if (res && res.rows.length > 0) {
         roi = res.rows[0];
       }
     } catch (e) {
-      console.warn('DB getFacilityRoiAnalytics error:', e.message);
+      console.error('DB getFacilityRoiAnalytics error:', e.message);
+      if (isProduction) throw e;
     }
   }
 

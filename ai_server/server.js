@@ -9,7 +9,17 @@ const bcrypt = require("bcryptjs");
 const { v4: uuidv4 } = require("uuid");
 require("dotenv").config();
 
-const { pool, query, withTransaction, memoryDb, ensureSuperAdminProvisioned, initializeDatabase, isDbConnected, getIsPgConnected, isProduction } = require("./db");
+const db = require("./db");
+const { pool, query, withTransaction, memoryDb, ensureSuperAdminProvisioned, initializeDatabase, isProduction } = db;
+
+// Safe wrapper for database connectivity check (backward & forward compatible)
+const isDbConnected = typeof db.isDbConnected === "function"
+  ? db.isDbConnected
+  : (typeof db.getIsPgConnected === "function"
+      ? db.getIsPgConnected
+      : () => Boolean(db.isPgConnected));
+
+const getIsPgConnected = isDbConnected;
 
 function checkPg() {
   return isDbConnected();

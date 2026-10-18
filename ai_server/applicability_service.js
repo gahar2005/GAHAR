@@ -3,7 +3,7 @@
 // Grounded in GAHAR Hospital Accreditation Standards & Scope of Service Rules
 // =============================================================================
 
-const { query, memoryDb, isPgConnected } = require('./db');
+const { query, memoryDb, isDbConnected, isProduction } = require('./db');
 
 const APPLICABILITY_QUESTIONS = [
   {
@@ -144,7 +144,7 @@ function getApplicabilityQuestions() {
 async function getFacilityApplicability(facilityId) {
   let answersMap = {};
 
-  if (isPgConnected) {
+  if (isDbConnected()) {
     try {
       const res = await query(
         'SELECT question_id, answer, notes FROM facility_applicability WHERE facility_id = $1',
@@ -157,11 +157,14 @@ async function getFacilityApplicability(facilityId) {
       }
     } catch (e) {
       console.warn('Could not read applicability from DB:', e.message);
+      if (isProduction) {
+        throw new Error('Database query error while loading applicability in production.');
+      }
     }
   }
 
-  // Fallback to memory if empty
-  if (Object.keys(answersMap).length === 0 && memoryApplicability.has(facilityId)) {
+  // Fallback to memory if empty (non-production only)
+  if (!isProduction && Object.keys(answersMap).length === 0 && memoryApplicability.has(facilityId)) {
     answersMap = memoryApplicability.get(facilityId);
   }
 
@@ -249,7 +252,11 @@ async function saveFacilityApplicability(facilityId, answersInput) {
     }
   }
 
-  if (isPgConnected) {
+  if (isProduction && !isDbConnected()) {
+    throw new Error('Database service unavailable in production.');
+  }
+
+  if (isDbConnected()) {
     for (const item of normalizedList) {
       await query(`
         INSERT INTO facility_applicability (facility_id, question_id, answer, notes, updated_at)
@@ -262,7 +269,9 @@ async function saveFacilityApplicability(facilityId, answersInput) {
     }
   }
 
-  memoryApplicability.set(facilityId, answersMap);
+  if (!isProduction) {
+    memoryApplicability.set(facilityId, answersMap);
+  }
 
   return await getFacilityApplicability(facilityId);
 }

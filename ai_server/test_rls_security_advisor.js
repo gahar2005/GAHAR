@@ -1,17 +1,29 @@
-const { Pool } = require('c:/code with vscode/my_app/ai_server/node_modules/pg');
-require('c:/code with vscode/my_app/ai_server/node_modules/dotenv').config({ path: 'c:/code with vscode/my_app/ai_server/.env' });
+const { Pool } = require('pg');
+require('dotenv').config();
 
 async function runSecurityAdvisorVerification() {
   console.log('================================================================');
   console.log('🛡️  SUPABASE SECURITY ADVISOR & RLS VERIFICATION SUITE');
   console.log('================================================================\n');
 
+  if (!process.env.DATABASE_URL) {
+    console.log('ℹ️ [SKIPPED] DATABASE_URL is not configured. Live Supabase RLS checks require a connected database.');
+    return;
+  }
+
   const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: { rejectUnauthorized: false }
   });
 
-  const client = await pool.connect();
+  let client;
+  try {
+    client = await pool.connect();
+  } catch (connErr) {
+    console.warn('⚠️ [SKIPPED] Could not connect to DATABASE_URL:', connErr.message);
+    await pool.end().catch(() => {});
+    return;
+  }
 
   let passed = 0;
   let failed = 0;

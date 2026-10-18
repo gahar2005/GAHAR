@@ -3,7 +3,7 @@
 // Enterprise Document Lifecycle, Version Control & Approval Workflow
 // =============================================================================
 
-const { query, isPgConnected } = require('./db');
+const { query, isDbConnected, isProduction } = require('./db');
 const { getExcludedStandardsSet } = require('./applicability_service');
 const { v4: uuidv4 } = require('uuid');
 
@@ -205,7 +205,11 @@ async function getCatalogWithApplicability(facilityId) {
 async function getFacilityDocuments(facilityId, { category, standardCode, status } = {}) {
   let docs = [];
 
-  if (isPgConnected) {
+  if (isProduction && !isDbConnected()) {
+    throw new Error('Database service unavailable in production.');
+  }
+
+  if (isDbConnected()) {
     try {
       let sql = 'SELECT * FROM generated_documents WHERE facility_id = $1';
       const params = [facilityId];
@@ -230,10 +234,13 @@ async function getFacilityDocuments(facilityId, { category, standardCode, status
       }
     } catch (e) {
       console.warn('DB getFacilityDocuments failed:', e.message);
+      if (isProduction) {
+        throw new Error('Database query error while loading documents in production.');
+      }
     }
   }
 
-  if (docs.length === 0 && memoryDocs.has(facilityId)) {
+  if (!isProduction && docs.length === 0 && memoryDocs.has(facilityId)) {
     docs = memoryDocs.get(facilityId);
   }
 
@@ -357,7 +364,11 @@ Approved by: Chief Executive Officer / Medical Director | Status: DRAFT PENDING 
     updated_at: new Date().toISOString(),
   };
 
-  if (isPgConnected) {
+  if (isProduction && !isDbConnected()) {
+    throw new Error('Database service unavailable in production.');
+  }
+
+  if (isDbConnected()) {
     try {
       const res = await query(`
         INSERT INTO generated_documents (
@@ -387,10 +398,13 @@ Approved by: Chief Executive Officer / Medical Director | Status: DRAFT PENDING 
       return res.rows[0];
     } catch (e) {
       console.warn('DB generateDocumentDraft failed:', e.message);
+      if (isProduction) {
+        throw new Error('Database insert error while generating document draft in production.');
+      }
     }
   }
 
-  // Fallback to memory
+  // Fallback to memory (non-production only)
   if (!memoryDocs.has(facilityId)) memoryDocs.set(facilityId, []);
   memoryDocs.get(facilityId).unshift(newDoc);
 
@@ -409,12 +423,12 @@ async function saveDocumentVersion({
 }) {
   let doc = null;
 
-  if (isPgConnected) {
+  if (isDbConnected()) {
     const res = await query('SELECT * FROM generated_documents WHERE id = $1 AND facility_id = $2', [documentId, facilityId]);
     if (res && res.rows.length > 0) {
       doc = res.rows[0];
     }
-  } else if (memoryDocs.has(facilityId)) {
+  } else if (!isProduction && memoryDocs.has(facilityId)) {
     doc = memoryDocs.get(facilityId).find(d => d.id === documentId);
   }
 
@@ -432,7 +446,7 @@ async function saveDocumentVersion({
     nextVersion = `v${major}.${minor}`;
   }
 
-  if (isPgConnected) {
+  if (isDbConnected()) {
     // Insert new version history
     await query(`
       INSERT INTO document_versions (document_id, facility_id, version, content, change_summary, author_id, created_at)
@@ -473,7 +487,7 @@ async function updateDocumentApprovalStatus({
     throw new Error(`Invalid status: ${status}`);
   }
 
-  if (isPgConnected) {
+  if (isDbConnected()) {
     const res = await query(`
       UPDATE generated_documents
       SET status = $1,
@@ -487,7 +501,7 @@ async function updateDocumentApprovalStatus({
     return res.rows[0];
   }
 
-  if (memoryDocs.has(facilityId)) {
+  if (!isProduction && memoryDocs.has(facilityId)) {
     const doc = memoryDocs.get(facilityId).find(d => d.id === documentId);
     if (doc) {
       doc.status = status;
@@ -503,7 +517,7 @@ async function updateDocumentApprovalStatus({
  * Get document version history
  */
 async function getDocumentVersions(documentId, facilityId) {
-  if (isPgConnected) {
+  if (isDbConnected()) {
     const res = await query(`
       SELECT v.*, u.full_name as author_name, u.role as author_role
       FROM document_versions v

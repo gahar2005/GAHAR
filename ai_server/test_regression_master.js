@@ -1,4 +1,6 @@
 const http = require('http');
+const { app } = require('./server');
+let testPort = 3000;
 const assert = require('assert');
 
 function makeRequest({ path, method = 'GET', headers = {}, body = null }) {
@@ -10,8 +12,8 @@ function makeRequest({ path, method = 'GET', headers = {}, body = null }) {
       reqHeaders['Content-Length'] = Buffer.byteLength(payload);
     }
     const req = http.request({
-      hostname: 'localhost',
-      port: 3000,
+      hostname: '127.0.0.1',
+      port: testPort,
       path,
       method,
       headers: reqHeaders,
@@ -31,6 +33,8 @@ function makeRequest({ path, method = 'GET', headers = {}, body = null }) {
 }
 
 async function run() {
+  let serverInstance = null;
+  await new Promise(r => { serverInstance = app.listen(0, '127.0.0.1', () => { testPort = serverInstance.address().port; r(); }); });
   console.log('🧪 Starting Master Regression Suite for GAHAR Platform...');
 
   // 1. Authenticate facility user via registration or login
@@ -191,6 +195,11 @@ async function run() {
   console.log('\n========================================');
   console.log('🎉 ALL MASTER REGRESSION TESTS PASSED!');
   console.log('========================================\n');
+  if (serverInstance) {
+    serverInstance.close(() => process.exit(0));
+  } else {
+    process.exit(0);
+  }
 }
 
 run().catch(err => {

@@ -4,8 +4,38 @@ const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 const bcrypt = require('bcryptjs');
 
+// Ensure environment configuration is safely loaded before reading any environment variables
+require('dotenv').config();
+if (!process.env.DATABASE_URL) {
+  require('dotenv').config({ path: path.join(__dirname, '.env') });
+}
+
+function normalizeDatabaseUrl(rawUrl) {
+  if (!rawUrl || typeof rawUrl !== 'string') return rawUrl;
+  let url = rawUrl.trim();
+
+  // Fix typo where 'a' was typed instead of '@' before db.<project-ref>.supabase.co
+  // e.g. postgresql://postgres:pass%23adb.ljwzjmsyrnwxlvtidlrs.supabase.co:5432/postgres
+  if (url.includes('adb.') && url.includes('.supabase.co') && !url.includes('@db.')) {
+    url = url.replace(/([^@\/:]+)adb\.([a-z0-9-]+)\.supabase\.co/i, '$1@db.$2.supabase.co');
+  }
+
+  // Also handle case where there is no '@' at all before db.<project-ref>.supabase.co
+  if (!url.includes('@') && url.includes('db.') && url.includes('.supabase.co')) {
+    url = url.replace(/(:\/\/[^:]+:[^@\/]+)db\.([a-z0-9-]+)\.supabase\.co/i, '$1@db.$2.supabase.co');
+  }
+
+  // Ensure sslmode=require for remote cloud databases (Supabase, Render)
+  if ((url.includes('supabase.co') || url.includes('render.com')) && !url.includes('sslmode=')) {
+    const separator = url.includes('?') ? '&' : '?';
+    url = `${url}${separator}sslmode=require`;
+  }
+
+  return url;
+}
+
 const isProduction = process.env.NODE_ENV === 'production';
-const databaseUrl = process.env.DATABASE_URL;
+const databaseUrl = normalizeDatabaseUrl(process.env.DATABASE_URL);
 
 if (isProduction && !databaseUrl) {
   console.error('❌ FATAL: DATABASE_URL is required in production mode. Refusing silent fallback to memoryDb.');
@@ -14,6 +44,7 @@ if (isProduction && !databaseUrl) {
 
 let pool = null;
 let isPgConnected = false;
+let initPromise = null;
 
 if (databaseUrl) {
   pool = new Pool({
@@ -28,14 +59,6 @@ if (databaseUrl) {
     connectionTimeoutMillis: 10000,
   });
 
-  pool.on('connect', () => {
-    if (!isPgConnected) {
-      console.log('✅ Connected to PostgreSQL / Supabase Database.');
-      isPgConnected = true;
-      initSchema();
-    }
-  });
-
   pool.on('error', (err) => {
     console.error('⚠️ PostgreSQL pool connection error (transient, reconnecting on demand):', err.message);
     isPgConnected = false;
@@ -44,25 +67,84 @@ if (databaseUrl) {
   console.warn('⚠️ Development Mode: No DATABASE_URL provided. Using in-memory database store (memoryDb).');
 }
 
-async function initSchema() {
-  try {
-    const schemaPath = path.join(__dirname, 'schema.sql');
-    if (fs.existsSync(schemaPath)) {
-      const sql = fs.readFileSync(schemaPath, 'utf8');
-      await pool.query(sql);
-      console.log('✅ Database schema verified / migrated successfully.');
-    }
-    // Apply v2 migration (idempotent — all statements use IF NOT EXISTS / DO NOTHING)
-    const v2Path = path.join(__dirname, 'gahar_v2_migration.sql');
-    if (fs.existsSync(v2Path)) {
-      const v2sql = fs.readFileSync(v2Path, 'utf8');
-      await pool.query(v2sql);
-      console.log('✅ v2 migration (gahar_v2_migration.sql) applied successfully.');
-    }
-    await ensureSuperAdminProvisioned();
-  } catch (err) {
-    console.warn('ℹ️ Notice during schema initialization:', err.message);
+/**
+ * Single-flight database initialization with promise lock to prevent concurrent initialization races.
+ */
+async function initializeDatabase() {
+  if (!pool) {
+    return { connected: false, mode: 'memoryDb' };
   }
+
+  if (initPromise) {
+    return initPromise;
+  }
+
+  initPromise = (async () => {
+    let client = null;
+    try {
+      client = await pool.connect();
+      await client.query('SELECT 1');
+      isPgConnected = true;
+      console.log('✅ Connected to PostgreSQL / Supabase Database.');
+
+      // 1. Base schema
+      const schemaPath = path.join(__dirname, 'schema.sql');
+      if (fs.existsSync(schemaPath)) {
+        const sql = fs.readFileSync(schemaPath, 'utf8');
+        await client.query(sql);
+        console.log('✅ Database schema verified / migrated successfully.');
+      }
+
+      // 2. v2 migration
+      const v2Path = path.join(__dirname, 'gahar_v2_migration.sql');
+      if (fs.existsSync(v2Path)) {
+        const v2sql = fs.readFileSync(v2Path, 'utf8');
+        await client.query(v2sql);
+        console.log('✅ v2 migration (gahar_v2_migration.sql) applied successfully.');
+      }
+
+      // 3. Deduplication and alignment migration
+      const fixDupPath = path.join(__dirname, 'fix_sat_dataset_duplicates.sql');
+      if (fs.existsSync(fixDupPath)) {
+        const fixDupSql = fs.readFileSync(fixDupPath, 'utf8');
+        await client.query(fixDupSql);
+        console.log('✅ SAT dataset alignment migration (fix_sat_dataset_duplicates.sql) applied successfully.');
+      }
+
+      // 4. v3 Persistence migration (gaps, action_plans, licenses, trash)
+      const v3Path = path.join(__dirname, 'gahar_v3_persistence_migration.sql');
+      if (fs.existsSync(v3Path)) {
+        const v3Sql = fs.readFileSync(v3Path, 'utf8');
+        await client.query(v3Sql);
+        console.log('✅ v3 persistence migration (gahar_v3_persistence_migration.sql) applied successfully.');
+      }
+
+      await ensureSuperAdminProvisioned();
+      return { connected: true, mode: 'postgres' };
+    } catch (err) {
+      isPgConnected = false;
+      if (isProduction) {
+        console.error('❌ FATAL: PostgreSQL database initialization failed in production:', err.message);
+        throw err;
+      }
+      console.warn('ℹ️ Notice during database initialization (falling back to memoryDb in dev):', err.message);
+      return { connected: false, mode: 'memoryDb', error: err.message };
+    } finally {
+      if (client) client.release();
+    }
+  })();
+
+  return initPromise;
+}
+
+// Auto-initialize if pool is configured
+if (pool) {
+  initializeDatabase().catch(err => {
+    if (isProduction) {
+      console.error('❌ Database initialization error:', err.message);
+      process.exit(1);
+    }
+  });
 }
 
 /**
@@ -281,18 +363,64 @@ async function query(text, params = []) {
         throw err;
       }
       console.warn('⚠️ Database query error:', err.message);
+      throw err;
     }
   }
   return null;
 }
 
+/**
+ * Execute multiple database operations atomically within a transaction.
+ */
+async function withTransaction(callback) {
+  if (!pool || !isPgConnected) {
+    throw new Error('Database is not connected; transaction cannot be started.');
+  }
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await callback(client);
+    await client.query('COMMIT');
+    return result;
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Graceful termination of the PostgreSQL pool.
+ */
+async function closeDatabasePool() {
+  if (pool) {
+    try {
+      await pool.end();
+      isPgConnected = false;
+      console.log('🔌 PostgreSQL connection pool terminated cleanly.');
+    } catch (err) {
+      console.warn('Notice terminating PostgreSQL pool:', err.message);
+    }
+  }
+}
+
+function isDbConnected() {
+  return Boolean(isPgConnected);
+}
+
 module.exports = {
   pool,
   query,
+  withTransaction,
+  closeDatabasePool,
   memoryDb,
   ensureSuperAdminProvisioned,
+  initializeDatabase,
+  isDbConnected,
+  getIsPgConnected: isDbConnected,
   get isPgConnected() {
-    return isPgConnected;
+    return Boolean(isPgConnected);
   },
   isProduction
 };

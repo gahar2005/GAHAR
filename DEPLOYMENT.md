@@ -48,17 +48,31 @@ Configure the following environment variables in your Render Web Service dashboa
 
 ## 3. Database Initialization & Schema Migrations
 
-To apply database tables, indexes, and authoritative seed data for all 277 GAHAR standards and 1,159 sub-evidence requirements:
+For a brand-new Supabase project:
 
-```bash
-cd ai_server
-node run_migration.js
-node seed_all_sat_data.js
-```
+1. **Option A (Recommended — Complete Schema + Seed Data)**:
+   Applies base tables, v2 expansion tables, RLS policies, and seeds all 281 standards and 1,159 sub-evidence requirements in a single idempotent run:
+   ```bash
+   cd ai_server
+   node seed_all_sat_data.js
+   ```
 
-### Safety Rules:
-- The backend automatically executes `initSchema()` and `ensureSuperAdminProvisioned()` safely on boot using `IF NOT EXISTS` guards.
-- No existing production data will be deleted or overwritten.
+2. **Option B (DDL Migrations Only)**:
+   If seeding is handled separately or in stages:
+   ```bash
+   cd ai_server
+   node run_migration.js
+   ```
+
+3. **Option C (Automatic on First Boot)**:
+   When `DATABASE_URL` is configured, `server.js` automatically executes `initializeDatabase()` on startup, applying `schema.sql` -> `gahar_v2_migration.sql` -> `fix_sat_dataset_duplicates.sql` using idempotent `IF NOT EXISTS` / `ON CONFLICT` guards.
+
+### Row Level Security (RLS) Architecture & Rules:
+- **Backend Service Context**: The Express backend connects to PostgreSQL / Supabase via `DATABASE_URL` (service role connection), which bypasses RLS by PostgreSQL design.
+- **Tenant Isolation**: In the backend API layer, tenant isolation is strictly enforced by the `enforceTenantIsolation` middleware (`req.tenantFacilityId = req.user.facilityId`) and parameterized `WHERE facility_id = $1` queries.
+- **Client Defense-in-Depth**: The RLS policies in `schema.sql` and `gahar_v2_migration.sql` protect direct client access via Supabase PostgREST (using `request.jwt.claims`).
+- **CRITICAL**: Do **NOT** enable `FORCE ROW LEVEL SECURITY` on public tables. Doing so would block backend service queries when `request.jwt.claims` session settings are absent.
+- No existing production data will be deleted or overwritten by re-running migrations.
 - Password hashes for established accounts are preserved across server restarts.
 
 ---

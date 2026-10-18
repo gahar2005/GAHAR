@@ -26,19 +26,52 @@ CREATE TABLE IF NOT EXISTS subscription_plans (
 CREATE TABLE IF NOT EXISTS facilities (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name VARCHAR(255) NOT NULL,
+    name_ar VARCHAR(255),
     type VARCHAR(128) NOT NULL, -- 'Hospital', 'Specialized Hospital', 'Primary Care', 'Lab', 'Radiology'
+    ownership VARCHAR(64) DEFAULT 'Private',
+    country VARCHAR(64) DEFAULT 'Egypt',
+    city VARCHAR(128),
     governorate VARCHAR(128) NOT NULL,
     address TEXT,
+    address_ar TEXT,
     bed_capacity INT NOT NULL DEFAULT 0,
     contact_person VARCHAR(255) NOT NULL,
+    contact_position VARCHAR(128),
     work_email VARCHAR(255) NOT NULL UNIQUE,
     phone VARCHAR(64) NOT NULL,
+    landline VARCHAR(64),
+    company_size VARCHAR(64),
+    departments TEXT[] DEFAULT '{}',
+    services TEXT[] DEFAULT '{}',
+    operating_hours VARCHAR(128),
+    has_quality_team BOOLEAN DEFAULT true,
+    accreditation_program VARCHAR(128) DEFAULT 'GAHAR 2025 v2',
+    license_document_url TEXT,
+    authorization_letter_url TEXT,
+    logo_url TEXT,
     gahar_version VARCHAR(64) DEFAULT 'GAHAR 2025 v2',
     target_survey_date DATE,
     status VARCHAR(64) NOT NULL DEFAULT 'PENDING_REVIEW', -- 'PENDING_PAYMENT', 'PENDING_REVIEW', 'PAYMENT_VERIFICATION', 'APPROVED', 'REJECTED', 'SUSPENDED', 'ACTIVE', 'EXPIRED'
     subscription_plan_id VARCHAR(64) REFERENCES subscription_plans(id),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+ALTER TABLE facilities ADD COLUMN IF NOT EXISTS name_ar VARCHAR(255);
+ALTER TABLE facilities ADD COLUMN IF NOT EXISTS ownership VARCHAR(64) DEFAULT 'Private';
+ALTER TABLE facilities ADD COLUMN IF NOT EXISTS country VARCHAR(64) DEFAULT 'Egypt';
+ALTER TABLE facilities ADD COLUMN IF NOT EXISTS city VARCHAR(128);
+ALTER TABLE facilities ADD COLUMN IF NOT EXISTS address_ar TEXT;
+ALTER TABLE facilities ADD COLUMN IF NOT EXISTS contact_position VARCHAR(128);
+ALTER TABLE facilities ADD COLUMN IF NOT EXISTS landline VARCHAR(64);
+ALTER TABLE facilities ADD COLUMN IF NOT EXISTS company_size VARCHAR(64);
+ALTER TABLE facilities ADD COLUMN IF NOT EXISTS departments TEXT[] DEFAULT '{}';
+ALTER TABLE facilities ADD COLUMN IF NOT EXISTS services TEXT[] DEFAULT '{}';
+ALTER TABLE facilities ADD COLUMN IF NOT EXISTS operating_hours VARCHAR(128);
+ALTER TABLE facilities ADD COLUMN IF NOT EXISTS has_quality_team BOOLEAN DEFAULT true;
+ALTER TABLE facilities ADD COLUMN IF NOT EXISTS accreditation_program VARCHAR(128) DEFAULT 'GAHAR 2025 v2';
+ALTER TABLE facilities ADD COLUMN IF NOT EXISTS license_document_url TEXT;
+ALTER TABLE facilities ADD COLUMN IF NOT EXISTS authorization_letter_url TEXT;
+ALTER TABLE facilities ADD COLUMN IF NOT EXISTS logo_url TEXT;
 
 CREATE INDEX IF NOT EXISTS idx_facilities_status ON facilities(status);
 CREATE INDEX IF NOT EXISTS idx_facilities_work_email ON facilities(work_email);

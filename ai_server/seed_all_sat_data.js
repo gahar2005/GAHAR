@@ -39,6 +39,15 @@ async function runFullSeed() {
       console.log('✅ gahar_v2_migration.sql applied successfully.');
     }
 
+    // Step 1c: Run gahar_v3_persistence_migration.sql (gaps, action_plans, licenses, trash)
+    const v3Path = path.join(__dirname, 'gahar_v3_persistence_migration.sql');
+    if (fs.existsSync(v3Path)) {
+      console.log('Applying gahar_v3_persistence_migration.sql...');
+      const v3Sql = fs.readFileSync(v3Path, 'utf8');
+      await client.query(v3Sql);
+      console.log('✅ gahar_v3_persistence_migration.sql applied successfully.');
+    }
+
     await client.query('BEGIN');
 
     // Step 2: Create sat_sub_evidence table

@@ -21,13 +21,18 @@ if (isSmtpConfigured) {
     ? process.env.SMTP_SECURE === 'true' 
     : (port === 465);
 
+  const rawPass = process.env.SMTP_PASS || '';
+  const cleanPass = (process.env.SMTP_HOST && process.env.SMTP_HOST.includes('gmail'))
+    ? rawPass.replace(/\s+/g, '')
+    : rawPass.trim();
+
   transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
     port,
     secure,
     auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS || '',
+      user: (process.env.SMTP_USER || '').trim(),
+      pass: cleanPass,
     },
     connectionTimeout: 10000,
     greetingTimeout: 10000,
