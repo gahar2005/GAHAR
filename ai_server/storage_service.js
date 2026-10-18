@@ -17,10 +17,13 @@ const MAX_FILE_SIZE_BYTES = 15 * 1024 * 1024; // 15MB
 
 const LOCAL_STORAGE_ROOT = path.join(__dirname, 'uploads');
 
-// Ensure base local storage directory exists
-if (!fs.existsSync(LOCAL_STORAGE_ROOT)) {
-  fs.mkdirSync(LOCAL_STORAGE_ROOT, { recursive: true });
+// Only create local uploads directory in development — Vercel (production) has a read-only filesystem
+if (process.env.NODE_ENV !== 'production') {
+  if (!fs.existsSync(LOCAL_STORAGE_ROOT)) {
+    fs.mkdirSync(LOCAL_STORAGE_ROOT, { recursive: true });
+  }
 }
+
 
 /**
  * Validates file type and size
@@ -80,6 +83,7 @@ async function uploadDocument({ facilityId, originalName, mimeType, base64Conten
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
+          'apikey': process.env.SUPABASE_SERVICE_ROLE_KEY,
           'Content-Type': mimeType || 'application/octet-stream',
           'x-upsert': 'true',
         },
@@ -112,6 +116,12 @@ async function uploadDocument({ facilityId, originalName, mimeType, base64Conten
   }
 
   // Local Tenant-Isolated Storage (development/testing only)
+  // This block is unreachable in production (isProduction + !hasSupabaseConfig throws above),
+  // but guard defensively to prevent crashes on Vercel's read-only filesystem.
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('Local file storage is not available in production. Configure SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.');
+  }
+
   const tenantDir = path.join(LOCAL_STORAGE_ROOT, facilityId);
   if (!fs.existsSync(tenantDir)) {
     fs.mkdirSync(tenantDir, { recursive: true });
@@ -131,6 +141,7 @@ async function uploadDocument({ facilityId, originalName, mimeType, base64Conten
     publicUrl: null,
   };
 }
+
 
 /**
  * Retrieves a document with strict facility ownership verification
@@ -158,6 +169,7 @@ async function getDocumentBuffer({ facilityId, storagePath }) {
       const res = await fetch(fetchUrl, {
         headers: {
           'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
+          'apikey': process.env.SUPABASE_SERVICE_ROLE_KEY,
         },
       });
 
@@ -202,7 +214,10 @@ async function deleteDocumentFile({ facilityId, storagePath }) {
       const deleteUrl = `${process.env.SUPABASE_URL}/storage/v1/object/${bucketName}/${storagePath}`;
       await fetch(deleteUrl, {
         method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}` },
+        headers: {
+          'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
+          'apikey': process.env.SUPABASE_SERVICE_ROLE_KEY,
+        },
       });
     } catch (_) {}
   }
@@ -236,6 +251,7 @@ async function getSignedDownloadUrl({ facilityId, storagePath, expiresInSeconds 
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
+          'apikey': process.env.SUPABASE_SERVICE_ROLE_KEY,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ expiresIn: expiresInSeconds }),
