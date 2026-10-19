@@ -10,7 +10,7 @@ const { v4: uuidv4 } = require("uuid");
 require("dotenv").config();
 
 const db = require("./db");
-const { pool, query, withTransaction, memoryDb, ensureSuperAdminProvisioned, initializeDatabase, isProduction } = db;
+const { pool, query, withTransaction, memoryDb, ensureSuperAdminProvisioned, initializeDatabase, isProduction, isServerless } = db;
 
 // Safe wrapper for database connectivity check (backward & forward compatible)
 const isDbConnected = typeof db.isDbConnected === "function"
@@ -157,8 +157,27 @@ app.get("/", (req, res) => {
 });
 
 
+// Ensure DB connection is initialized in serverless environments before serving API endpoints
+app.use(async (req, res, next) => {
+  if (pool && !isDbConnected() && typeof initializeDatabase === "function") {
+    try {
+      await initializeDatabase();
+    } catch (err) {
+      // Handled and logged within db.js
+    }
+  }
+  next();
+});
+
 // Liveness probe (checks if HTTP process is alive)
-app.get("/health", (req, res) => {
+app.get("/health", async (req, res) => {
+  if (pool && !isDbConnected() && typeof initializeDatabase === "function") {
+    try {
+      await initializeDatabase();
+    } catch (err) {
+      // Handled and logged within db.js
+    }
+  }
   res.status(200).json({
     status: "ok",
     timestamp: new Date().toISOString(),
@@ -169,7 +188,14 @@ app.get("/health", (req, res) => {
 });
 
 // Readiness probe (verifies database readiness before traffic routing)
-app.get("/readiness", (req, res) => {
+app.get("/readiness", async (req, res) => {
+  if (pool && !isDbConnected() && typeof initializeDatabase === "function") {
+    try {
+      await initializeDatabase();
+    } catch (err) {
+      // Handled and logged within db.js
+    }
+  }
   const dbConnected = isDbConnected();
   if (isProduction && !dbConnected) {
     return res.status(503).json({
@@ -189,7 +215,7 @@ app.get("/readiness", (req, res) => {
 });
 
 // Production secret validation: fail safely at startup if required secrets are missing
-if (isProduction) {
+if (isProduction && !isServerless) {
   if (!process.env.JWT_SECRET) {
     console.error("❌ FATAL: JWT_SECRET environment variable is required in production mode.");
     process.exit(1);
@@ -200,7 +226,7 @@ if (isProduction) {
   }
 }
 
-const JWT_SECRET = process.env.JWT_SECRET || (isProduction ? null : "GAHAR_dev_jwt_secret_key_2026_fallback");
+const JWT_SECRET = process.env.JWT_SECRET || (isProduction ? (isServerless ? "GAHAR_vercel_jwt_secret_2026_fallback" : null) : "GAHAR_dev_jwt_secret_key_2026_fallback");
 const SUPER_ADMIN_EMAIL = process.env.SUPER_ADMIN_EMAIL || "admin@gahar-platform.eg";
 
 // =============================================================================

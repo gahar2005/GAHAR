@@ -49,28 +49,28 @@ class ApiService {
     }
   }
 
-  static Future<http.Response> _authGet(Uri uri) async {
+  static Future<http.Response> authGet(Uri uri) async {
     final headers = await _getHeaders();
     final res = await http.get(uri, headers: headers);
     checkUnauthorized(res.statusCode);
     return res;
   }
 
-  static Future<http.Response> _authPost(Uri uri, {Object? body}) async {
+  static Future<http.Response> authPost(Uri uri, {Object? body}) async {
     final headers = await _getHeaders();
     final res = await http.post(uri, headers: headers, body: body);
     checkUnauthorized(res.statusCode);
     return res;
   }
 
-  static Future<http.Response> _authPut(Uri uri, {Object? body}) async {
+  static Future<http.Response> authPut(Uri uri, {Object? body}) async {
     final headers = await _getHeaders();
     final res = await http.put(uri, headers: headers, body: body);
     checkUnauthorized(res.statusCode);
     return res;
   }
 
-  static Future<http.Response> _authDelete(Uri uri) async {
+  static Future<http.Response> authDelete(Uri uri) async {
     final headers = await _getHeaders();
     final res = await http.delete(uri, headers: headers);
     checkUnauthorized(res.statusCode);

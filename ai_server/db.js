@@ -25,21 +25,22 @@ function normalizeDatabaseUrl(rawUrl) {
     url = url.replace(/(:\/\/[^:]+:[^@\/]+)db\.([a-z0-9-]+)\.supabase\.co/i, '$1@db.$2.supabase.co');
   }
 
-  // Ensure sslmode=require for remote cloud databases (Supabase, Render)
-  if ((url.includes('supabase.co') || url.includes('render.com')) && !url.includes('sslmode=')) {
-    const separator = url.includes('?') ? '&' : '?';
-    url = `${url}${separator}sslmode=require`;
-  }
+  // Strip sslmode query parameter so pg does not enforce strict libpq/verify-full certificate verification
+  // which causes "self-signed certificate in certificate chain" errors with cloud poolers (Supabase/Render)
+  url = url.replace(/([?&])sslmode=[^&]+(&|$)/g, (m, p1, p2) => p2 === '&' ? p1 : '').replace(/[?&]$/, '');
 
   return url;
 }
 
 const isProduction = process.env.NODE_ENV === 'production';
+const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.NOW_REGION);
 const databaseUrl = normalizeDatabaseUrl(process.env.DATABASE_URL);
 
 if (isProduction && !databaseUrl) {
   console.error('❌ FATAL: DATABASE_URL is required in production mode. Refusing silent fallback to memoryDb.');
-  process.exit(1);
+  if (!isServerless) {
+    process.exit(1);
+  }
 }
 
 let pool = null;
@@ -47,14 +48,11 @@ let isPgConnected = false;
 let initPromise = null;
 
 if (databaseUrl) {
+  const isCloudDb = databaseUrl.includes('supabase') || databaseUrl.includes('render') || databaseUrl.includes('pooler');
   pool = new Pool({
     connectionString: databaseUrl,
-    ssl: isProduction
-      ? { rejectUnauthorized: false }
-      : (databaseUrl.includes('supabase') || databaseUrl.includes('render') || databaseUrl.includes('sslmode=require')
-          ? { rejectUnauthorized: false }
-          : false),
-    max: 20,
+    ssl: (isProduction || isCloudDb) ? { rejectUnauthorized: false } : false,
+    max: isServerless ? 5 : (isProduction ? 15 : 20),
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 10000,
   });
@@ -123,11 +121,11 @@ async function initializeDatabase() {
       return { connected: true, mode: 'postgres' };
     } catch (err) {
       isPgConnected = false;
-      if (isProduction) {
+      if (isProduction && !isServerless) {
         console.error('❌ FATAL: PostgreSQL database initialization failed in production:', err.message);
         throw err;
       }
-      console.warn('ℹ️ Notice during database initialization (falling back to memoryDb in dev):', err.message);
+      console.warn('ℹ️ Notice during database initialization:', err.message);
       return { connected: false, mode: 'memoryDb', error: err.message };
     } finally {
       if (client) client.release();
@@ -140,8 +138,8 @@ async function initializeDatabase() {
 // Auto-initialize if pool is configured
 if (pool) {
   initializeDatabase().catch(err => {
-    if (isProduction) {
-      console.error('❌ Database initialization error:', err.message);
+    console.error('❌ Database initialization error:', err.message);
+    if (isProduction && !isServerless) {
       process.exit(1);
     }
   });
@@ -422,6 +420,7 @@ module.exports = {
   get isPgConnected() {
     return Boolean(isPgConnected);
   },
-  isProduction
+  isProduction,
+  isServerless
 };
 

@@ -8,6 +8,8 @@
     "test": "test"
   },
   "scripts": {
+    "build": "cd ai_server && npm install",
+    "postinstall": "cd ai_server && npm install",
     "start": "node ai_server/server.js",
     "test": "cd ai_server && npm test"
   },
