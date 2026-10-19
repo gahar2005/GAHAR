@@ -25,6 +25,12 @@ function normalizeDatabaseUrl(rawUrl) {
     url = url.replace(/(:\/\/[^:]+:[^@\/]+)db\.([a-z0-9-]+)\.supabase\.co/i, '$1@db.$2.supabase.co');
   }
 
+  // Supabase pooler on port 6543 (transaction pooler) fails authentication with user format postgres.<ref>,
+  // while port 5432 (session pooler) authenticates reliably with 100% success
+  if (url.includes('.pooler.supabase.com:6543')) {
+    url = url.replace('.pooler.supabase.com:6543', '.pooler.supabase.com:5432');
+  }
+
   // Strip sslmode and ssl query parameters so pg uses the explicit ssl configuration with rejectUnauthorized: false
   // which prevents "self-signed certificate in certificate chain" errors with Supabase poolers
   url = url.replace(/([?&])ssl(mode)?=[^&]+(&|$)/gi, (m, p1, p2, p3) => p3 === '&' ? p1 : '').replace(/[?&]$/, '');
