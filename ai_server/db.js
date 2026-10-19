@@ -25,9 +25,9 @@ function normalizeDatabaseUrl(rawUrl) {
     url = url.replace(/(:\/\/[^:]+:[^@\/]+)db\.([a-z0-9-]+)\.supabase\.co/i, '$1@db.$2.supabase.co');
   }
 
-  // Strip sslmode query parameter so pg does not enforce strict libpq/verify-full certificate verification
-  // which causes "self-signed certificate in certificate chain" errors with cloud poolers (Supabase/Render)
-  url = url.replace(/([?&])sslmode=[^&]+(&|$)/g, (m, p1, p2) => p2 === '&' ? p1 : '').replace(/[?&]$/, '');
+  // Strip sslmode and ssl query parameters so pg uses the explicit ssl configuration with rejectUnauthorized: false
+  // which prevents "self-signed certificate in certificate chain" errors with Supabase poolers
+  url = url.replace(/([?&])ssl(mode)?=[^&]+(&|$)/gi, (m, p1, p2, p3) => p3 === '&' ? p1 : '').replace(/[?&]$/, '');
 
   return url;
 }
@@ -52,9 +52,9 @@ if (databaseUrl) {
   pool = new Pool({
     connectionString: databaseUrl,
     ssl: (isProduction || isCloudDb) ? { rejectUnauthorized: false } : false,
-    max: isServerless ? 5 : (isProduction ? 15 : 20),
+    max: isServerless ? 3 : (isProduction ? 15 : 20),
     idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 10000,
+    connectionTimeoutMillis: 15000,
   });
 
   pool.on('error', (err) => {
@@ -85,39 +85,54 @@ async function initializeDatabase() {
       isPgConnected = true;
       console.log('✅ Connected to PostgreSQL / Supabase Database.');
 
-      // 1. Base schema
-      const schemaPath = path.join(__dirname, 'schema.sql');
-      if (fs.existsSync(schemaPath)) {
-        const sql = fs.readFileSync(schemaPath, 'utf8');
-        await client.query(sql);
-        console.log('✅ Database schema verified / migrated successfully.');
+      // Check if schema is already provisioned to avoid slow DDL execution on every serverless cold start
+      let tablesAlreadyExist = false;
+      try {
+        const checkResult = await client.query("SELECT 1 FROM information_schema.tables WHERE table_name = 'facilities' LIMIT 1");
+        tablesAlreadyExist = checkResult.rows && checkResult.rows.length > 0;
+      } catch (_) {
+        tablesAlreadyExist = false;
       }
 
-      // 2. v2 migration
-      const v2Path = path.join(__dirname, 'gahar_v2_migration.sql');
-      if (fs.existsSync(v2Path)) {
-        const v2sql = fs.readFileSync(v2Path, 'utf8');
-        await client.query(v2sql);
-        console.log('✅ v2 migration (gahar_v2_migration.sql) applied successfully.');
+      if (!tablesAlreadyExist) {
+        console.log('⏳ Running initial database migrations...');
+        // 1. Base schema
+        const schemaPath = path.join(__dirname, 'schema.sql');
+        if (fs.existsSync(schemaPath)) {
+          const sql = fs.readFileSync(schemaPath, 'utf8');
+          await client.query(sql);
+          console.log('✅ Database schema verified / migrated successfully.');
+        }
+
+        // 2. v2 migration
+        const v2Path = path.join(__dirname, 'gahar_v2_migration.sql');
+        if (fs.existsSync(v2Path)) {
+          const v2sql = fs.readFileSync(v2Path, 'utf8');
+          await client.query(v2sql);
+          console.log('✅ v2 migration (gahar_v2_migration.sql) applied successfully.');
+        }
+
+        // 3. Deduplication and alignment migration
+        const fixDupPath = path.join(__dirname, 'fix_sat_dataset_duplicates.sql');
+        if (fs.existsSync(fixDupPath)) {
+          const fixDupSql = fs.readFileSync(fixDupPath, 'utf8');
+          await client.query(fixDupSql);
+          console.log('✅ SAT dataset alignment migration (fix_sat_dataset_duplicates.sql) applied successfully.');
+        }
+
+        // 4. v3 Persistence migration (gaps, action_plans, licenses, trash)
+        const v3Path = path.join(__dirname, 'gahar_v3_persistence_migration.sql');
+        if (fs.existsSync(v3Path)) {
+          const v3Sql = fs.readFileSync(v3Path, 'utf8');
+          await client.query(v3Sql);
+          console.log('✅ v3 persistence migration (gahar_v3_persistence_migration.sql) applied successfully.');
+        }
+
+        await ensureSuperAdminProvisioned();
+      } else {
+        console.log('✅ Database schema verified (existing tables found, skipped redundant migrations).');
       }
 
-      // 3. Deduplication and alignment migration
-      const fixDupPath = path.join(__dirname, 'fix_sat_dataset_duplicates.sql');
-      if (fs.existsSync(fixDupPath)) {
-        const fixDupSql = fs.readFileSync(fixDupPath, 'utf8');
-        await client.query(fixDupSql);
-        console.log('✅ SAT dataset alignment migration (fix_sat_dataset_duplicates.sql) applied successfully.');
-      }
-
-      // 4. v3 Persistence migration (gaps, action_plans, licenses, trash)
-      const v3Path = path.join(__dirname, 'gahar_v3_persistence_migration.sql');
-      if (fs.existsSync(v3Path)) {
-        const v3Sql = fs.readFileSync(v3Path, 'utf8');
-        await client.query(v3Sql);
-        console.log('✅ v3 persistence migration (gahar_v3_persistence_migration.sql) applied successfully.');
-      }
-
-      await ensureSuperAdminProvisioned();
       return { connected: true, mode: 'postgres' };
     } catch (err) {
       isPgConnected = false;
